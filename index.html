@@ -856,7 +856,37 @@ async function loadFromFirestore(name) {
     console.error('데이터 로드 중 오류:', e);
   }
 }
+function restoreFormData(data) {
+  if (!data) return;
 
+  // 1. 일반 텍스트, 숫자, 선택 상자(select) 복구
+  Object.entries(data).forEach(([key, value]) => {
+    const el = document.getElementById(key);
+    if (el) {
+      if (el.type === 'checkbox') {
+        el.checked = value;
+      } else {
+        el.value = value;
+      }
+    }
+    
+    // 2. 라디오 버튼 복구 (예: 최종 선택 아이디어)
+    if (key.startsWith('radio_')) {
+      const radioName = key.replace('radio_', '');
+      const radioEl = document.querySelector(`input[name="${radioName}"][value="${value}"]`);
+      if (radioEl) radioEl.checked = true;
+    }
+
+    // 3. 별점 복구
+    if (key === 'starRating') {
+      setRating(parseInt(value) || 0);
+    }
+  });
+
+  // 4. 차트 및 특수 요소 업데이트
+  if (window.growthChartInstance) updateRadarChart(); // 성장 그래프 업데이트
+  updatePromptBlocks(); // 프롬프트 미리보기 블록 업데이트
+}
 function setupAutoSave() {
   if (!firebaseReady || isTeacher) return;
   const allFields = document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select');
