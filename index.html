@@ -843,11 +843,17 @@ async function loadFromFirestore(name) {
   if (!firebaseReady) return;
   try {
     const doc = await db.collection('students').doc(name).get();
-    if (doc.exists && doc.data().data) {
-      restoreFormData(doc.data().data);
+    if (doc.exists) {
+      const userData = doc.data().data; // 저장된 데이터 꾸러미
+      if (userData) {
+        console.log("데이터를 불러왔습니다:", userData);
+        restoreFormData(userData); // 화면에 뿌려주는 함수 호출
+      }
+    } else {
+      console.log("새로운 사용자입니다. 기존 데이터가 없습니다.");
     }
   } catch(e) {
-    console.error('Load error:', e);
+    console.error('데이터 로드 중 오류:', e);
   }
 }
 
