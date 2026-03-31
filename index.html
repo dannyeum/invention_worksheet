@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI S/W 발명가 디지털 워크스테이션</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<!-- SheetJS for Excel export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+body { font-family: 'Noto Sans KR', sans-serif; background-color: #F9FAFB; color: #1F2937; }
+.chart-container { position:relative; width:100%; max-width:600px; margin:auto; height:300px; max-height:400px; }
+@media(min-width:768px){.chart-container{height:350px;}}
+.step-content { display:none; animation:fadeIn 0.5s ease-in-out; }
+.step-content.active { display:block; }
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.card-hover:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px rgba(0,0,0,.1);}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:#f1f1f1}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.modal-content{background:white;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);}
+.saving-pulse{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.firebase-error{background:#fee2e2;border:1px solid #fca5a5;padding:12px;border-radius:8px;margin-bottom:16px;font-size:12px;color:#991b1b;}
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<!-- ===== LOGIN MODAL ===== -->
+<div id="login-modal" class="modal-overlay" style="z-index:10000;">
+  <div class="modal-content" style="max-width:480px;">
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">🤖</div>
+      <h2 class="text-2xl font-bold text-gray-900">AI S/W 발명가 워크스테이션</h2>
+      <p class="text-gray-500 text-sm mt-1">이름을 입력하면 내 활동 기록이 자동으로 저장됩니다</p>
+    </div>
+    <div id="firebase-config-error" class="firebase-error hidden">
+      ⚠️ Firebase가 설정되지 않았습니다. 이 파일 하단의 <strong>FIREBASE_CONFIG</strong> 설정을 완료해주세요.
+      <a href="#" onclick="alert('JavaScript 코드 최하단의 FIREBASE_CONFIG 객체에 Firebase 콘솔에서 복사한 값을 입력하세요.')" class="underline ml-1">설정 방법 보기</a>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-bold text-gray-700 mb-2">학생 이름</label>
+      <input id="login-name" type="text" maxlength="20"
+        class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500 text-lg font-medium"
+        placeholder="예: 김민준"
+        onkeydown="if(event.key==='Enter')handleLogin()">
+      <p class="text-xs text-gray-500 mt-1">* 같은 이름으로 입력하면 이전 내용이 불러와집니다</p>
+    </div>
+    <button onclick="handleLogin()" id="login-btn"
+      class="w-full bg-teal-600 hover:bg-teal-700 text-white py-3 px-6 rounded-lg font-bold text-lg transition shadow-lg mb-3">
+      시작하기 →
+    </button>
+    <div class="border-t pt-3">
+      <button onclick="handleTeacherLogin()"
+        class="w-full text-gray-400 hover:text-gray-600 text-sm py-2 transition">
+        🔑 선생님 모드로 입장
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RESET CONFIRM MODAL ===== -->
+<div id="reset-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-4">⚠️</div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">데이터 초기화</h3>
+      <p class="text-gray-600 text-sm">모든 입력 내용이 지워집니다.<br>그래도 초기화 하시겠습니까?</p>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="cancelReset()" class="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition">취소</button>
+      <button onclick="executeReset()" class="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition">초기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TEACHER MODAL ===== -->
+<div id="teacher-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-content" style="max-width:580px;">
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h3 class="text-xl font-bold text-gray-900">👩‍🏫 선생님 모드</h3>
+        <p class="text-sm text-gray-500">학생 데이터를 조회하고 엑셀로 다운로드합니다</p>
+      </div>
+      <button onclick="closeTeacherModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+    </div>
+    <div id="teacher-stats" class="bg-gray-50 rounded-lg p-4 mb-4">
+      <div class="text-sm text-gray-600">데이터를 불러오는 중...</div>
+    </div>
+    <div class="grid grid-cols-1 gap-3">
+      <button onclick="exportAllToExcel()"
+        class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
+        <span>📊</span> 전체 학생 데이터 엑셀 다운로드
+      </button>
+      <button onclick="exportSingleStudent()"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
+        <span>👤</span> 특정 학생 데이터만 다운로드
+      </button>
+      <button onclick="closeTeacherModal()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition text-sm">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HIDDEN FILE INPUT ===== -->
+<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileSelect(event)">
+
+<!-- ===== HEADER ===== -->
+<header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">🤖</span>
+      <h1 class="text-xl font-bold text-gray-900 tracking-tight">AI S/W 발명가 <span class="text-teal-600">워크스테이션</span></h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <div id="user-badge" class="hidden items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-lg">
+        <span class="text-teal-600 text-sm">👤</span>
+        <span id="current-user-display" class="text-teal-700 font-bold text-sm"></span>
+      </div>
+      <div id="save-indicator" class="hidden items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200">
+        <span id="save-icon">✓</span><span id="save-text">저장됨</span>
+      </div>
+      <button onclick="openTeacherPanel()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition shadow-sm" title="선생님 모드" id="teacher-btn" style="display:none!important">
+        <span>📊</span><span class="hidden md:inline">선생님</span>
+      </button>
+      <button onclick="confirmReset()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-lg transition" title="초기화">
+        <span>🔄</span><span class="hidden md:inline">초기화</span>
+      </button>
+      <button onclick="switchUser()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition" title="사용자 변경">
+        <span>↩</span><span class="hidden md:inline">변경</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== NAVIGATION ===== -->
+<nav class="bg-white border-b border-gray-200 overflow-x-auto">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex space-x-8" id="nav-tabs"></div>
+  </div>
+</nav>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+  <!-- ========== STEP 1 ========== -->
+  <section id="step-1" class="step-content active">
+    <div class="mb-8 bg-teal-50 border-l-4 border-teal-500 p-4 rounded-r-lg">
+      <h2 class="text-2xl font-bold text-teal-800 mb-2">활동지 1: 발명 탐색 및 따뜻한 문제 정의 (1~2차시)</h2>
+      <p class="text-teal-700 italic text-lg">"발명은 주변에 대한 관심과 일상의 불편함에서 시작됩니다."</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>💡</span> 1. 생활 속 발명품과 영향</h3>
+      <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
+        <div class="text-sm font-medium text-gray-700 mb-2">📌 예시</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label class="block text-xs font-medium text-gray-600 mb-1">발명품</label><div class="p-2 bg-white rounded border border-gray-300 text-sm">전자레인지</div></div>
+          <div><label class="block text-xs font-medium text-gray-600 mb-1">기능</label><div class="p-2 bg-white rounded border border-gray-300 text-sm">음식 데우기</div></div>
+          <div><label class="block text-xs font-medium text-gray-600 mb-1">우리 생활에 주는 영향</label><div class="p-2 bg-white rounded border border-gray-300 text-sm">식사 준비가 편리해짐</div></div>
+        </div>
+      </div>
+      <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+        <div class="text-sm font-medium text-blue-900 mb-3">✏️ 나의 사례</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">발명품</label><input id="s1-invention" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 스마트폰"></div>
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">기능</label><input id="s1-function" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 정보 검색"></div>
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">우리 생활에 주는 영향</label><input id="s1-impact" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 언제 어디서나 정보 확인"></div>
+        </div>
+        <div><label class="block text-xs font-medium text-gray-700 mb-1">자세한 설명</label><textarea id="s1-description" rows="3" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="내가 사용해 본 경험과 느낀 점을 자유롭게 작성하세요..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🎵</span> 2. 바이브 코딩(Vibe Coding)과 AI 활용 기초</h3>
+      <div class="bg-green-50 p-4 rounded-lg mb-4 border-l-4 border-green-500">
+        <div class="text-sm font-bold text-green-900 mb-2">💡 바이브 코딩이란?</div>
+        <p class="text-sm text-green-800">코드를 한 줄씩 입력하는 대신, <strong>의도와 느낌(Vibe)을 설명</strong>하면 AI가 프로그램을 만들어주는 새로운 방식입니다.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="p-4 bg-gray-100 rounded-lg border border-gray-200"><div class="text-sm font-bold text-gray-800 mb-2">⌨️ 기존 코딩</div><div class="bg-gray-900 text-green-400 p-3 rounded text-xs font-mono">&lt;button&gt;Click&lt;/button&gt;</div><p class="text-xs text-gray-600 mt-2">코드 문법을 알아야 합니다</p></div>
+        <div class="p-4 bg-teal-50 rounded-lg border border-teal-200"><div class="text-sm font-bold text-teal-800 mb-2">🎵 바이브 코딩</div><div class="bg-teal-100 text-teal-800 p-3 rounded text-xs">"예쁜 파란색 버튼을 만들어줘"</div><p class="text-xs text-gray-600 mt-2">자연어(말)로 설명하면 됩니다</p></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div class="p-4 bg-orange-50 rounded-lg border border-orange-100 cursor-pointer card-hover transition-all duration-300" onclick="alert('마스크 알리미 앱: 코로나 시기 약국별 마스크 재고 실시간 알림!\n\n💡 기술보다 사람들의 불편함에서 출발했습니다.')"><div class="text-2xl mb-2">😷</div><h4 class="font-bold text-orange-800 mb-1">마스크 알리미 앱</h4><p class="text-xs text-gray-600">클릭하여 자세히 보기</p></div>
+        <div class="p-4 bg-blue-50 rounded-lg border border-blue-100 cursor-pointer card-hover transition-all duration-300" onclick="alert('급식 정보 앱: 급식 메뉴, 알레르기 정보를 한눈에!\n\n💡 학교생활의 작은 불편함에서 시작했습니다.')"><div class="text-2xl mb-2">🍱</div><h4 class="font-bold text-blue-800 mb-1">급식 정보 앱</h4><p class="text-xs text-gray-600">클릭하여 자세히 보기</p></div>
+        <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-100 cursor-pointer card-hover transition-all duration-300" onclick="alert('날씨 알림 앱: 등하교 시간에 맞춰 우산 필요 여부 알림!\n\n💡 일상의 작은 불편함이 훌륭한 발명의 시작점입니다.')"><div class="text-2xl mb-2">🌦️</div><h4 class="font-bold text-yellow-800 mb-1">날씨 알림 앱</h4><p class="text-xs text-gray-600">클릭하여 자세히 보기</p></div>
+      </div>
+      <div class="bg-red-50 p-4 rounded-lg border-2 border-red-200 mb-4">
+        <div class="text-sm font-bold text-red-900 mb-2">⚠️ AI 활용 윤리 지침</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="bg-white p-3 rounded border border-red-200"><strong class="text-red-800 text-sm">🔍 비판적 수용</strong><p class="text-gray-600 text-xs mt-1">AI의 답변을 무조건 믿지 않고, 맞는지 확인하기</p></div>
+          <div class="bg-white p-3 rounded border border-red-200"><strong class="text-red-800 text-sm">✍️ 프롬프트 리터러시</strong><p class="text-gray-600 text-xs mt-1">구체적인 상황, 제약 조건, 역할, 결과 형식을 포함하여 질문하기</p></div>
+          <div class="bg-white p-3 rounded border border-red-200"><strong class="text-red-800 text-sm">👤 주체성 유지</strong><p class="text-gray-600 text-xs mt-1">최종 결정은 내가! AI는 도움을 주는 도구일 뿐</p></div>
+          <div class="bg-white p-3 rounded border border-red-200"><strong class="text-red-800 text-sm">🤝 개방적 태도</strong><p class="text-gray-600 text-xs mt-1">모둠 토론 시 비난 금지, 다양한 의견 존중하기</p></div>
+        </div>
+      </div>
+      <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+        <div class="text-sm font-medium text-purple-900 mb-2">🤖 AI 챗봇 활용 소감</div>
+        <textarea id="s1-ai-comment" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="AI 챗봇을 사용해 본 소감과 사용 시 주의할 점을 적어보세요..."></textarea>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🔍</span> 3. 불편함 관찰 및 진짜 문제 찾기</h3>
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 mb-2">📝 문제 상황 (그림 또는 글로 기록)</label>
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 min-h-[160px]">
+          <textarea id="s1-problem-drawing" class="w-full min-h-[140px] p-2 border-0 bg-transparent focus:outline-none resize-none text-sm" placeholder="여기에 문제 상황을 자세히 설명하세요...&#10;예: 우산꽂이에 우산이 너무 많아서 내 우산을 찾기 힘들어요."></textarea>
+        </div>
+      </div>
+      <div class="bg-teal-50 p-5 rounded-lg border border-teal-200">
+        <div class="text-sm font-bold text-teal-900 mb-4">🔎 문제 분석 (육하원칙)</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">누가 (Who)</label><input id="s1-who" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 우리 반 친구들이"></div>
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">언제 (When)</label><input id="s1-when" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 비 오는 날 하교할 때"></div>
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">어디서 (Where)</label><input id="s1-where" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 학교 현관 우산꽂이에서"></div>
+          <div><label class="block text-xs font-medium text-gray-700 mb-1">무엇을 (What)</label><input id="s1-what" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 내 우산을 찾는 일"></div>
+          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-700 mb-1">왜 불편한가요? (Why)</label><textarea id="s1-why" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 우산 모양이 비슷해서 섞이면 찾는데 오래 걸려요."></textarea></div>
+          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-700 mb-1">어떻게 해결하고 싶나요? (How)</label><textarea id="s1-how" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 스마트폰으로 우산 위치를 찾을 수 있는 앱을 만들고 싶어요."></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl shadow p-6 border-l-4 border-teal-500">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🌿</span> [1~2차시 성찰 일지] 발명의 눈</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">📚 배운 점</label><textarea id="s1-learned" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="바이브 코딩과 생활 속 불편함 개선에 대해 배운 점을 적어보세요..."></textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">💭 느낀 점</label><textarea id="s1-felt" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="AI를 활용하면서 느낀 점과 주의할 점을 자유롭게 적어보세요..."></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== STEP 2 ========== -->
+  <section id="step-2" class="step-content">
+    <div class="mb-8 bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg">
+      <h2 class="text-2xl font-bold text-yellow-800 mb-2">활동지 2: 아이디어 탐색 및 SCAMPER 디자인 (3~4차시)</h2>
+      <p class="text-yellow-700 italic text-lg">"사고 기법을 활용하면 평범한 생각이 특별한 발명이 됩니다."</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>💡</span> 1. SCAMPER 발명 사고 기법 적용하기</h3>
+      <p class="text-sm text-gray-600 mb-4">각 기법으로 나만의 아이디어와 AI 프롬프트를 작성해보세요.</p>
+      <div class="space-y-4">
+
+        <!-- S -->
+        <div class="border-2 border-indigo-200 rounded-lg overflow-hidden">
+          <div class="bg-indigo-100 px-4 py-3 border-b border-indigo-200"><h4 class="font-bold text-indigo-900">🔄 S - 대체하기 (Substitute)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (무엇을 → 무엇으로?)</label><input id="s2-sub-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 플라스틱 빨대 → 종이 빨대"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-sub-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 선생님의 어려운 말을 쉬운 말로 바꿔주는 앱을 만들어줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- C -->
+        <div class="border-2 border-green-200 rounded-lg overflow-hidden">
+          <div class="bg-green-100 px-4 py-3 border-b border-green-200"><h4 class="font-bold text-green-900">➕ C - 결합하기 (Combine)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (무엇 + 무엇?)</label><input id="s2-com-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 연필꽂이 + 집게 = 안 떨어지는 연필꽂이"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-com-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 우산 알리미 앱에 날씨 알람 기능을 더해줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- A -->
+        <div class="border-2 border-red-200 rounded-lg overflow-hidden">
+          <div class="bg-red-100 px-4 py-3 border-b border-red-200"><h4 class="font-bold text-red-900">🔧 A - 응용하기 (Adapt)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (어디서 영감 → 무엇에 응용?)</label><input id="s2-ada-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 게임 레벨 시스템 → 공부 앱에 적용"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-ada-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: OO의 원리를 적용하여 OO 앱을 만들어줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- M -->
+        <div class="border-2 border-purple-200 rounded-lg overflow-hidden">
+          <div class="bg-purple-100 px-4 py-3 border-b border-purple-200"><h4 class="font-bold text-purple-900">🔍 M - 수정/확대하기 (Modify)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (무엇을 어떻게 수정?)</label><input id="s2-mod-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 작은 돋보기 → 2배 크기 확대경"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-mod-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 글자 크기를 2배 크게 만들어줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- P -->
+        <div class="border-2 border-orange-200 rounded-lg overflow-hidden">
+          <div class="bg-orange-100 px-4 py-3 border-b border-orange-200"><h4 class="font-bold text-orange-900">🔀 P - 다른 용도로 (Put to other use)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (원래 용도 → 새 용도?)</label><input id="s2-put-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 페트병 → 우산꽂이"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-put-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 급식 메뉴 앱을 '오늘의 운세' 앱으로 변경해줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- E -->
+        <div class="border-2 border-pink-200 rounded-lg overflow-hidden">
+          <div class="bg-pink-100 px-4 py-3 border-b border-pink-200"><h4 class="font-bold text-pink-900">➖ E - 제거/축소하기 (Eliminate)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (무엇을 제거?)</label><input id="s2-eli-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 복잡한 리모컨 → 버튼 3개짜리"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-eli-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 시작 화면을 없애고 바로 기능이 실행되게 해줘."></textarea></div>
+          </div>
+        </div>
+
+        <!-- R -->
+        <div class="border-2 border-teal-200 rounded-lg overflow-hidden">
+          <div class="bg-teal-100 px-4 py-3 border-b border-teal-200"><h4 class="font-bold text-teal-900">🔃 R - 반전하기 (Reverse)</h4></div>
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">나의 아이디어 (무엇을 반대로?)</label><input id="s2-rev-idea" type="text" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 사용자가 질문 → AI가 먼저 질문"></div>
+            <div><label class="block text-xs font-medium text-gray-700 mb-1">AI 프롬프트</label><textarea id="s2-rev-prompt" rows="2" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="예: 틀려야 점수가 오르는 청개구리 퀴즈를 만들어줘."></textarea></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>⚖️</span> 2. 아이디어 비교 및 특징 평가</h3>
+      <div class="overflow-x-auto mb-6">
+        <table class="min-w-full border-collapse border border-gray-300">
+          <thead><tr class="bg-gray-100">
+            <th class="border border-gray-300 px-4 py-3 text-left text-sm font-bold text-gray-700">평가 항목</th>
+            <th class="border border-gray-300 px-4 py-3 text-center text-sm font-bold text-blue-700">아이디어 1</th>
+            <th class="border border-gray-300 px-4 py-3 text-center text-sm font-bold text-orange-700">아이디어 2</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="border border-gray-300 px-4 py-3 bg-gray-50 font-medium text-sm">아이디어 이름</td>
+              <td class="border border-gray-300 px-4 py-3"><input id="s2-idea1-name" type="text" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="예: 스마트 우산꽂이"></td>
+              <td class="border border-gray-300 px-4 py-3"><input id="s2-idea2-name" type="text" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="예: 양치질 게임 타이머"></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3 bg-gray-50 font-medium text-sm">주요 특징</td>
+              <td class="border border-gray-300 px-4 py-3"><textarea id="s2-idea1-features" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 특징이 있나요?"></textarea></td>
+              <td class="border border-gray-300 px-4 py-3"><textarea id="s2-idea2-features" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 특징이 있나요?"></textarea></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3 bg-gray-50 font-medium text-sm">창의성 (1~10)</td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea1-creativity" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea2-creativity" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3 bg-gray-50 font-medium text-sm">따뜻함/나눔 (1~10)</td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea1-warmth" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea2-warmth" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3 bg-gray-50 font-medium text-sm">실현 가능성 (1~10)</td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea1-feasibility" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td>
+              <td class="border border-gray-300 px-4 py-3 text-center"><input id="s2-idea2-feasibility" type="number" min="1" max="10" class="w-20 p-2 border border-gray-300 rounded text-sm text-center" placeholder="점수"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bg-gradient-to-br from-blue-50 to-orange-50 p-5 rounded-lg border border-gray-200 mb-4">
+        <h4 class="text-sm font-bold text-gray-900 mb-3 text-center">📊 아이디어 비교 차트</h4>
+        <div class="chart-container"><canvas id="ideaChart"></canvas></div>
+      </div>
+      <div class="bg-green-50 p-5 rounded-lg border-2 border-green-300">
+        <h4 class="font-bold text-green-900 mb-3">✅ 최종 선택 및 이유</h4>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">선택한 아이디어</label>
+            <div class="flex gap-4">
+              <label class="flex items-center"><input type="radio" name="final-idea" value="1" class="mr-2"><span class="text-sm">아이디어 1</span></label>
+              <label class="flex items-center"><input type="radio" name="final-idea" value="2" class="mr-2"><span class="text-sm">아이디어 2</span></label>
+            </div>
+          </div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">선택 이유</label><textarea id="s2-final-reason" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="왜 이 아이디어를 선택했나요?"></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl shadow p-6 border-l-4 border-yellow-500">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>💡</span> [3~4차시 성찰] 상상의 확장</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">📚 배운 점</label><textarea id="s2-learned" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="SCAMPER 기법을 사용하기 전과 후의 변화를 적어보세요..."></textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">💭 느낀 점</label><textarea id="s2-felt" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="아이디어를 평가하고 선택하면서 느낀 점을 자유롭게 적어보세요..."></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== STEP 3 ========== -->
+  <section id="step-3" class="step-content">
+    <div class="mb-8 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+      <h2 class="text-2xl font-bold text-blue-800 mb-2">활동지 3: 마스터 프롬프트 설계 및 구현하기 (5차시)</h2>
+      <p class="text-blue-700 italic text-lg">"AI 비서에게 명확한 '역할'과 '임무'를 부여하여 나만의 앱을 만들어봅시다."</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🏗️</span> 1. 프롬프트 구조화 (Role - Task - Constraint)</h3>
+
+      <div class="mb-6">
+        <div class="bg-purple-100 px-4 py-3 rounded-t-lg border-b-2 border-purple-300"><h4 class="font-bold text-purple-900">👤 역할 (Role) - AI는 누구인가요?</h4></div>
+        <div class="bg-purple-50 p-5 rounded-b-lg border border-purple-200">
+          <p class="text-sm text-gray-700 mb-3"><strong>💡 설명:</strong> AI에게 어떤 전문가 역할을 맡길지 정합니다.</p>
+          <div class="bg-white p-3 rounded border border-purple-300 mb-3"><p class="text-sm text-gray-700">예시: "너는 어린이를 위한 <strong>식습관 전문가</strong>이자 다정한 코딩 파트너야."</p></div>
+          <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+            <p class="text-sm text-gray-700 mb-2">너는 어린이를 위한</p>
+            <input id="prompt-role-field" type="text" class="w-full p-3 border-2 border-blue-400 rounded-md text-sm font-medium" placeholder="예: 환경 보호 전문가, 건강 관리 도우미">
+            <p class="text-sm text-gray-700 mt-2">이자 다정한 코딩 파트너야.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <div class="bg-green-100 px-4 py-3 rounded-t-lg border-b-2 border-green-300"><h4 class="font-bold text-green-900">🎯 작업 (Task) - 무엇을 만들까요?</h4></div>
+        <div class="bg-green-50 p-5 rounded-b-lg border border-green-200">
+          <p class="text-sm text-gray-700 mb-3"><strong>💡 설명:</strong> 해결하려는 문제와 앱의 기능을 명확히 적어주세요.</p>
+          <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+            <textarea id="prompt-task-combined" rows="3" class="w-full p-3 border-2 border-blue-400 rounded-md text-sm font-medium" placeholder="예: 사용자가 우산을 쉽게 찾을 수 있게 돕는 알림 앱을 만들 거야."></textarea>
+            <div class="mt-3">
+              <label class="text-xs text-gray-600 mb-2 block">💡 사용한 SCAMPER 기법 (클릭하여 선택)</label>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="toggleScamper(this,'S')" class="px-3 py-1.5 border-2 border-red-300 bg-white hover:bg-red-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-red-600">S</span> 대체</button>
+                <button type="button" onclick="toggleScamper(this,'C')" class="px-3 py-1.5 border-2 border-orange-300 bg-white hover:bg-orange-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-orange-600">C</span> 결합</button>
+                <button type="button" onclick="toggleScamper(this,'A')" class="px-3 py-1.5 border-2 border-yellow-300 bg-white hover:bg-yellow-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-yellow-600">A</span> 응용</button>
+                <button type="button" onclick="toggleScamper(this,'M')" class="px-3 py-1.5 border-2 border-green-300 bg-white hover:bg-green-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-green-600">M</span> 수정</button>
+                <button type="button" onclick="toggleScamper(this,'P')" class="px-3 py-1.5 border-2 border-blue-300 bg-white hover:bg-blue-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-blue-600">P</span> 다른용도</button>
+                <button type="button" onclick="toggleScamper(this,'E')" class="px-3 py-1.5 border-2 border-purple-300 bg-white hover:bg-purple-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-purple-600">E</span> 제거</button>
+                <button type="button" onclick="toggleScamper(this,'R')" class="px-3 py-1.5 border-2 border-pink-300 bg-white hover:bg-pink-100 rounded-lg text-xs font-medium transition"><span class="font-bold text-pink-600">R</span> 반전</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <div class="bg-orange-100 px-4 py-3 rounded-t-lg border-b-2 border-orange-300"><h4 class="font-bold text-orange-900">📏 규칙 (Constraint) - 어떤 디자인으로?</h4></div>
+        <div class="bg-orange-50 p-5 rounded-b-lg border border-orange-200">
+          <div class="bg-blue-50 p-4 rounded-lg border-2 border-blue-300">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <div><label class="text-xs text-gray-600">글자 크기</label><select id="prompt-font-size" class="w-full p-2 border border-gray-300 rounded text-sm mt-1"><option>아주 크게</option><option>크게</option><option>보통</option><option>작게</option></select></div>
+              <div><label class="text-xs text-gray-600">색상 느낌</label><select id="prompt-color-theme" class="w-full p-2 border border-gray-300 rounded text-sm mt-1"><option>따뜻한 느낌 (주황, 노랑)</option><option>시원한 느낌 (파랑, 초록)</option><option>밝은 느낌 (흰색, 연한색)</option><option>차분한 느낌 (회색, 베이지)</option></select></div>
+              <div><label class="text-xs text-gray-600">버튼 개수</label><select id="prompt-button-count" class="w-full p-2 border border-gray-300 rounded text-sm mt-1"><option>3개 이내</option><option>5개 이내</option><option>많이 (제한 없음)</option></select></div>
+              <div><label class="text-xs text-gray-600">특수 기능</label><select id="prompt-special-feature" class="w-full p-2 border border-gray-300 rounded text-sm mt-1"><option>없음</option><option>소리/음악 재생</option><option>타이머/알람</option><option>점수 기록</option></select></div>
+            </div>
+            <div><label class="text-xs text-gray-600 mb-1 block">추가 요구사항</label><textarea id="prompt-constraint-extra" rows="2" class="w-full p-3 border-2 border-blue-400 rounded-md text-sm" placeholder="예: 귀여운 캐릭터를 넣어줘, 애니메이션 효과를 넣어줘"></textarea></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt Preview & Generator -->
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>⚡</span> 2. 마스터 프롬프트 생성기</h3>
+      <div class="flex flex-wrap gap-3 items-center justify-center min-h-[80px] p-4 bg-white rounded-lg shadow-sm border border-indigo-100 mb-6">
+        <div id="block-role" class="px-4 py-2 bg-purple-500 text-white rounded-lg shadow-md transition-all duration-300 transform scale-90 opacity-50"><span class="text-xs font-bold block opacity-75 mb-1">👤 역할</span><span id="display-role" class="text-sm">역할을 입력하세요</span></div>
+        <div class="text-2xl text-gray-300 font-bold">+</div>
+        <div id="block-task" class="px-4 py-2 bg-green-500 text-white rounded-lg shadow-md transition-all duration-300 transform scale-90 opacity-50"><span class="text-xs font-bold block opacity-75 mb-1">🎯 작업</span><span id="display-task" class="text-sm">만들 앱을 입력하세요</span></div>
+        <div class="text-2xl text-gray-300 font-bold">+</div>
+        <div id="block-constraint" class="px-4 py-2 bg-orange-500 text-white rounded-lg shadow-md transition-all duration-300 transform scale-90 opacity-50"><span class="text-xs font-bold block opacity-75 mb-1">📏 규칙</span><span id="display-constraint" class="text-sm">규칙을 정하세요</span></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-lg border-2 border-blue-300">
+          <button onclick="generateMasterPrompt()" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 transition font-bold shadow-lg text-sm">✨ 마스터 프롬프트 생성하기</button>
+          <div class="mt-4 bg-white p-4 rounded-lg border border-blue-200 text-xs text-gray-600 space-y-1">
+            <p>① 역할, 작업, 규칙을 모두 입력하세요</p>
+            <p>② 생성하기 버튼 클릭</p>
+            <p>③ 오른쪽 프롬프트를 복사하여 AI에 붙여넣기</p>
+          </div>
+        </div>
+        <div class="bg-gray-900 rounded-lg shadow-lg p-6 border-2 border-gray-700 flex flex-col">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-bold text-gray-200 text-sm">📟 최종 마스터 프롬프트</h4>
+            <button onclick="copyPrompt()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition">📋 복사</button>
+          </div>
+          <div id="master-prompt-display" class="bg-gray-800 p-4 rounded-lg flex-grow border border-gray-600 font-mono text-sm leading-relaxed overflow-y-auto min-h-[200px] text-white whitespace-pre-wrap">
+            <span class="text-gray-500">// 여기에 생성된 프롬프트가 표시됩니다.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>💬</span> [5차시 성찰] 나만의 앱 구현</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">📚 배운 점</label><textarea id="s3-learned" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="프롬프트 작성에서 가장 중요하게 강조한 단어는 무엇인가요?"></textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">💭 느낀 점</label><textarea id="s3-felt" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="내가 쓴 글이 실제 버튼과 화면으로 변했을 때 어떤 기분이 들었나요?"></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== STEP 4 ========== -->
+  <section id="step-4" class="step-content">
+    <div class="mb-8 bg-purple-50 border-l-4 border-purple-500 p-4 rounded-r-lg">
+      <h2 class="text-2xl font-bold text-purple-800 mb-2">활동지 4: 버그 사냥 및 개선 리포트 (6~7차시)</h2>
+      <p class="text-purple-700 italic text-lg">"친구의 눈으로 바라보면 더 완벽한 발명품이 됩니다."</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🐛</span> 1. 기술적 문제 해결 (디버깅)</h3>
+      <div class="bg-red-50 p-4 rounded-lg border-2 border-red-200 mb-6">
+        <h4 class="font-bold text-red-900 mb-2">🎯 미션: "친구의 앱을 고장 내라!"</h4>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-white p-3 rounded border border-red-300"><div class="text-sm font-bold text-red-800 mb-1">기능 버그</div><p class="text-xs text-gray-600">버튼을 눌러도 아무 일도 안 일어남</p></div>
+          <div class="bg-white p-3 rounded border border-red-300"><div class="text-sm font-bold text-red-800 mb-1">디자인 버그</div><p class="text-xs text-gray-600">글자가 너무 작아서 안 보임</p></div>
+          <div class="bg-white p-3 rounded border border-red-300"><div class="text-sm font-bold text-red-800 mb-1">내용 버그</div><p class="text-xs text-gray-600">잘못된 정보가 표시됨</p></div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto mb-4">
+        <table class="min-w-full border-collapse border-2 border-gray-300">
+          <thead><tr class="bg-gradient-to-r from-purple-100 to-pink-100">
+            <th class="border border-gray-300 px-4 py-3 text-left text-sm font-bold text-gray-800 w-1/4">발견한 버그</th>
+            <th class="border border-gray-300 px-4 py-3 text-left text-sm font-bold text-gray-800 w-1/3">AI에게 한 질문</th>
+            <th class="border border-gray-300 px-4 py-3 text-left text-sm font-bold text-gray-800 w-1/3">AI의 해결책</th>
+            <th class="border border-gray-300 px-4 py-3 text-center text-sm font-bold text-gray-800 w-16">해결</th>
+          </tr></thead>
+          <tbody id="bug-table-body">
+            <tr><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug1-found" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 문제를 발견했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug1-question" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI에게 어떻게 질문했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug1-solution" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI가 어떤 해결책을 제시했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3 text-center align-middle"><input type="checkbox" id="s4-bug1-solved" class="w-5 h-5"></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug2-found" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 문제를 발견했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug2-question" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI에게 어떻게 질문했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug2-solution" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI가 어떤 해결책을 제시했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3 text-center align-middle"><input type="checkbox" id="s4-bug2-solved" class="w-5 h-5"></td></tr>
+            <tr><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug3-found" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 문제를 발견했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug3-question" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI에게 어떻게 질문했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug3-solution" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI가 어떤 해결책을 제시했나요?"></textarea></td><td class="border border-gray-300 px-4 py-3 text-center align-middle"><input type="checkbox" id="s4-bug3-solved" class="w-5 h-5"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button onclick="addBugRow()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition shadow-sm">➕ 버그 기록 추가</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🤔</span> 1.5. AI 답변 검증 체크리스트</h3>
+      <div class="space-y-3 mb-4">
+        <div class="bg-white p-4 rounded-lg border border-indigo-200"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="s4-check1" class="mt-1 w-5 h-5 text-indigo-600 rounded"><div><div class="text-sm font-bold text-gray-800 mb-1">1. AI가 추천한 기능 중 실제로 필요 없는 기능은 없나요?</div><textarea id="s4-check1-note" rows="2" class="w-full p-2 border border-gray-300 rounded text-xs mt-2" placeholder="발견한 내용을 적어보세요..."></textarea></div></label></div>
+        <div class="bg-white p-4 rounded-lg border border-indigo-200"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="s4-check2" class="mt-1 w-5 h-5 text-indigo-600 rounded"><div><div class="text-sm font-bold text-gray-800 mb-1">2. AI가 잘못 알고 있는 사실은 없나요?</div><textarea id="s4-check2-note" rows="2" class="w-full p-2 border border-gray-300 rounded text-xs mt-2" placeholder="발견한 내용을 적어보세요..."></textarea></div></label></div>
+        <div class="bg-white p-4 rounded-lg border border-indigo-200"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="s4-check3" class="mt-1 w-5 h-5 text-indigo-600 rounded"><div><div class="text-sm font-bold text-gray-800 mb-1">3. AI가 제안한 디자인이 처음 목적과 맞나요?</div><textarea id="s4-check3-note" rows="2" class="w-full p-2 border border-gray-300 rounded text-xs mt-2" placeholder="발견한 내용을 적어보세요..."></textarea></div></label></div>
+        <div class="bg-white p-4 rounded-lg border border-indigo-200"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="s4-check4" class="mt-1 w-5 h-5 text-indigo-600 rounded"><div><div class="text-sm font-bold text-gray-800 mb-1">4. AI가 제시한 해결책이 실제로 작동하나요?</div><textarea id="s4-check4-note" rows="2" class="w-full p-2 border border-gray-300 rounded text-xs mt-2" placeholder="발견한 내용을 적어보세요..."></textarea></div></label></div>
+        <div class="bg-white p-4 rounded-lg border border-indigo-200"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="s4-check5" class="mt-1 w-5 h-5 text-indigo-600 rounded"><div><div class="text-sm font-bold text-gray-800 mb-1">5. AI의 제안을 우리 상황에 맞게 수정할 필요가 있나요?</div><textarea id="s4-check5-note" rows="2" class="w-full p-2 border border-gray-300 rounded text-xs mt-2" placeholder="발견한 내용을 적어보세요..."></textarea></div></label></div>
+      </div>
+      <div class="bg-green-50 p-5 rounded-lg border border-green-200">
+        <h4 class="font-bold text-green-900 mb-2">💭 최종 판단 및 개선 방향</h4>
+        <textarea id="s4-final-judgment" rows="4" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="AI의 제안 중 무엇을 수정하거나 삭제할 것인지 결정해보세요..."></textarea>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>👥</span> 2. 동료 피드백 (G.G.G)</h3>
+      <div class="space-y-4 mb-4">
+        <div class="border-2 border-green-300 rounded-lg overflow-hidden">
+          <div class="bg-green-100 px-4 py-3 border-b border-green-300"><h4 class="font-bold text-green-900">✨ Glow (좋은 점)</h4></div>
+          <div class="p-4 bg-green-50 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <textarea id="s4-glow1" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 1의 칭찬..."></textarea>
+            <textarea id="s4-glow2" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 2의 칭찬..."></textarea>
+          </div>
+        </div>
+        <div class="border-2 border-blue-300 rounded-lg overflow-hidden">
+          <div class="bg-blue-100 px-4 py-3 border-b border-blue-300"><h4 class="font-bold text-blue-900">🌱 Grow (개선할 점)</h4></div>
+          <div class="p-4 bg-blue-50 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <textarea id="s4-grow1" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 1의 개선 제안..."></textarea>
+            <textarea id="s4-grow2" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 2의 개선 제안..."></textarea>
+          </div>
+        </div>
+        <div class="border-2 border-orange-300 rounded-lg overflow-hidden">
+          <div class="bg-orange-100 px-4 py-3 border-b border-orange-300"><h4 class="font-bold text-orange-900">🐛 Glitch (오류)</h4></div>
+          <div class="p-4 bg-orange-50 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <textarea id="s4-glitch1" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 1의 오류 보고..."></textarea>
+            <textarea id="s4-glitch2" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="친구 2의 오류 보고..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="bg-purple-50 p-5 rounded-lg border-2 border-purple-300">
+        <h4 class="font-bold text-purple-900 mb-3">🎯 개선 실행 계획</h4>
+        <div class="space-y-3">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">친구들의 제안 중 실제로 고쳐볼 것</label><textarea id="s4-action-plan" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="적용할 개선사항..."></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">AI에게 요청할 수정 내용</label><textarea id="s4-refactor" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="예: 시작 버튼 크기를 2배로 키워줘"></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl shadow p-6 border-l-4 border-purple-500">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🛠️</span> [6~7차시 성찰] 끈기 있는 도전</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">📚 배운 점</label><textarea id="s4-learned" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="디버깅 과정에서 배운 코딩 원리나 문제 해결 방법을 적어보세요..."></textarea></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-2">💭 느낀 점</label><textarea id="s4-felt" class="w-full p-3 border border-gray-300 rounded-md text-sm" rows="3" placeholder="친구들의 피드백을 받으면서 느낀 점을 적어보세요..."></textarea></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== STEP 5 ========== -->
+  <section id="step-5" class="step-content">
+    <div class="mb-8 bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg">
+      <h2 class="text-2xl font-bold text-indigo-800 mb-2">활동지 5: 프로젝트 최종 성찰 (8차시)</h2>
+      <p class="text-indigo-700 italic text-lg">"기술을 넘어 마음을 전하는 발명가가 되었습니다."</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🎪</span> 갤러리 워크 & 발표</h3>
+      <div class="bg-gradient-to-r from-yellow-50 to-orange-50 p-5 rounded-lg border-2 border-yellow-300 mb-4">
+        <h4 class="font-bold text-gray-900 mb-3">🏆 부문별 '좋아요' 투표</h4>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white p-4 rounded-lg border border-yellow-200"><div class="text-2xl mb-2">💡</div><div class="font-bold text-yellow-800 mb-2">기발한 아이디어상</div><input id="s5-award-idea" type="text" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="친구 또는 앱 이름"></div>
+          <div class="bg-white p-4 rounded-lg border border-yellow-200"><div class="text-2xl mb-2">🎨</div><div class="font-bold text-yellow-800 mb-2">편리한 디자인상</div><input id="s5-award-design" type="text" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="친구 또는 앱 이름"></div>
+          <div class="bg-white p-4 rounded-lg border border-yellow-200"><div class="text-2xl mb-2">⚡</div><div class="font-bold text-yellow-800 mb-2">기술 혁신상</div><input id="s5-award-tech" type="text" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="친구 또는 앱 이름"></div>
+        </div>
+      </div>
+      <div class="bg-teal-50 p-5 rounded-lg border border-teal-200">
+        <h4 class="font-bold text-teal-900 mb-3">🤔 프로젝트 성찰 질문</h4>
+        <div class="space-y-3">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Q1. 처음에 발견한 문제를 S/W로 잘 해결되었나요?</label><textarea id="s5-q1" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="잘 해결되었다면 어떤 점에서, 안 되었다면 그 이유를 적어보세요..."></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Q2. SCAMPER 기법 중 가장 도움이 되었던 단계는?</label><textarea id="s5-q2" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="어떤 기법이 왜 도움이 되었는지 적어보세요..."></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Q3. AI는 나에게 어떤 도움을 주었나요?</label><textarea id="s5-q3" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="AI의 역할과 한계에 대해 생각해보세요..."></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>💝</span> 1. 발명의 가치 되새기기</h3>
+      <div class="bg-gradient-to-r from-pink-50 to-purple-50 p-6 rounded-lg border-2 border-pink-200">
+        <div class="space-y-4">
+          <div><label class="block text-sm font-medium text-gray-700 mb-2">내가 만든 S/W 발명품 이름</label><input id="s5-invention-name" type="text" class="w-full p-3 border-2 border-pink-300 rounded-md text-sm font-medium" placeholder="예: 따뜻한 우산 찾기 도우미"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-2">이 발명품이 누구에게 도움이 되나요?</label><textarea id="s5-helps-who" rows="2" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="예: 비 오는 날 우산을 잃어버려 걱정하는 친구들"></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-2">어떤 '나눔'의 가치가 있나요?</label><textarea id="s5-sharing-value" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="예: 서로 배려하는 마음을 키울 수 있습니다."></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-2">어떤 '공유'의 가치가 있나요?</label><textarea id="s5-community-value" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="예: 친구들과 함께 사용하며 더 나은 해결책을 찾을 수 있습니다."></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>🤝</span> 2. 나의 역할 성찰</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="border-2 border-blue-300 rounded-lg overflow-hidden">
+          <div class="bg-blue-100 px-4 py-3 border-b border-blue-300"><h4 class="font-bold text-blue-900">🤖 AI의 기여</h4></div>
+          <div class="p-5 bg-blue-50"><textarea id="s5-ai-contribution" rows="5" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="AI가 이 프로젝트에서 어떤 역할을 했는지 적어보세요..."></textarea></div>
+        </div>
+        <div class="border-2 border-orange-300 rounded-lg overflow-hidden">
+          <div class="bg-orange-100 px-4 py-3 border-b border-orange-300"><h4 class="font-bold text-orange-900">👨‍💻 나의 주도성</h4></div>
+          <div class="p-5 bg-orange-50"><textarea id="s5-my-leadership" rows="5" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="내가 주도적으로 결정한 순간들을 적어보세요..."></textarea></div>
+        </div>
+      </div>
+      <div class="bg-purple-50 p-5 rounded-lg border-2 border-purple-300">
+        <h4 class="font-bold text-purple-900 mb-2">💡 AI와의 협업에서 깨달은 점</h4>
+        <textarea id="s5-collaboration-insight" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="AI와 함께 일하면서 느낀 점을 적어보세요..."></textarea>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border border-gray-100 mb-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>📈</span> 3. 나의 발명가 역량 종합</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-lg p-5 border-2 border-gray-200">
+          <h4 class="font-bold text-gray-900 mb-3">📊 예시 그래프</h4>
+          <div class="chart-container" style="height:220px;"><canvas id="growthChartExample"></canvas></div>
+        </div>
+        <div class="bg-indigo-50 rounded-lg p-5 border-2 border-indigo-300">
+          <h4 class="font-bold text-indigo-900 mb-3">✨ 나의 성장 그래프 (슬라이더 조절)</h4>
+          <div class="space-y-2 mb-4">
+            <div><div class="flex justify-between text-xs"><label class="font-medium text-gray-700">관찰력</label><span class="text-indigo-600 font-bold" id="score-observation">3</span></div><input type="range" min="1" max="5" value="3" class="w-full h-2" id="slider-observation" oninput="updateRadarChart()"></div>
+            <div><div class="flex justify-between text-xs"><label class="font-medium text-gray-700">AI 협업능력</label><span class="text-indigo-600 font-bold" id="score-ai">3</span></div><input type="range" min="1" max="5" value="3" class="w-full h-2" id="slider-ai" oninput="updateRadarChart()"></div>
+            <div><div class="flex justify-between text-xs"><label class="font-medium text-gray-700">문제해결력</label><span class="text-indigo-600 font-bold" id="score-problem">3</span></div><input type="range" min="1" max="5" value="3" class="w-full h-2" id="slider-problem" oninput="updateRadarChart()"></div>
+            <div><div class="flex justify-between text-xs"><label class="font-medium text-gray-700">끈기/도전</label><span class="text-indigo-600 font-bold" id="score-persistence">3</span></div><input type="range" min="1" max="5" value="3" class="w-full h-2" id="slider-persistence" oninput="updateRadarChart()"></div>
+            <div><div class="flex justify-between text-xs"><label class="font-medium text-gray-700">공감능력</label><span class="text-indigo-600 font-bold" id="score-empathy">3</span></div><input type="range" min="1" max="5" value="3" class="w-full h-2" id="slider-empathy" oninput="updateRadarChart()"></div>
+          </div>
+          <div class="chart-container" style="height:180px;"><canvas id="growthChart"></canvas></div>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-indigo-100 to-purple-100 p-6 rounded-lg border-2 border-indigo-300 text-center">
+        <div class="text-4xl mb-3">🎉</div>
+        <h4 class="text-xl font-bold text-indigo-900 mb-2">축하합니다!</h4>
+        <p class="text-indigo-700 text-lg font-medium">"당신은 이제 세상을 바꾸는 따뜻한 S/W 발명가입니다!"</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6 border-l-4 border-indigo-500">
+      <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><span>✨</span> [최종 성찰] 성장의 기쁨</h3>
+      <div class="space-y-6">
+        <div class="bg-yellow-50 p-5 rounded-lg border-2 border-yellow-300">
+          <label class="block text-sm font-medium text-gray-700 mb-3">오늘 나의 AI 협력 점수는 몇 점인가요?</label>
+          <div class="flex items-center gap-4 mb-4">
+            <div class="flex text-yellow-400 text-3xl cursor-pointer" id="star-rating">
+              <span class="star hover:text-yellow-500 transition" onclick="setRating(1)">☆</span>
+              <span class="star hover:text-yellow-500 transition" onclick="setRating(2)">☆</span>
+              <span class="star hover:text-yellow-500 transition" onclick="setRating(3)">☆</span>
+              <span class="star hover:text-yellow-500 transition" onclick="setRating(4)">☆</span>
+              <span class="star hover:text-yellow-500 transition" onclick="setRating(5)">☆</span>
+            </div>
+            <span class="text-2xl font-bold text-yellow-600" id="rating-value">0</span>
+            <span class="text-sm text-gray-600">/ 5점</span>
+          </div>
+          <textarea id="s5-star-reason" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="이 점수를 준 이유를 적어보세요..."></textarea>
+        </div>
+        <div class="bg-indigo-50 p-5 rounded-lg border-2 border-indigo-300">
+          <label class="block text-sm font-medium text-gray-700 mb-2">전체 프로젝트를 통해 가장 크게 성장한 점</label>
+          <textarea id="s5-growth" rows="4" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="8차시 동안의 여정을 돌아보며, 내가 가장 성장했다고 느끼는 부분을 자유롭게 적어보세요..."></textarea>
+        </div>
+        <div class="bg-green-50 p-5 rounded-lg border-2 border-green-300">
+          <label class="block text-sm font-medium text-gray-700 mb-2">미래의 나에게 보내는 메시지</label>
+          <textarea id="s5-future-message" rows="3" class="w-full p-3 border border-gray-300 rounded-md text-sm" placeholder="1년 후의 나에게 응원의 메시지를 남겨보세요..."></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="bg-white border-t border-gray-200 mt-auto">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="text-sm text-gray-500">© 2024 AI S/W Invention Class · Firebase + Vercel 배포</div>
+    <div class="flex space-x-4">
+      <span class="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">교과 융합형 활동지</span>
+      <span class="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">AI 협업</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ============================================================
+// ⚙️ 설정 섹션 - Firebase 콘솔에서 복사한 값을 입력하세요
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1cbWw-TH-o7HhFcGBX0kpDcFB7AHocSc",
+  authDomain: "inventor-worksheet.firebaseapp.com",
+  projectId: "inventor-worksheet",
+  storageBucket: "inventor-worksheet.firebasestorage.app",
+  messagingSenderId: "133653181260",
+  appId: "1:133653181260:web:a63feb6c710950235fd5e9"
+};
+
+// 선생님 모드 비밀번호 (변경하세요)
+const TEACHER_PASSWORD = "teacher1234";
+// ============================================================
+
+// ===== STATE =====
+let currentUser = null;
+let isTeacher = false;
+let currentRating = 0;
+let autoSaveTimer = null;
+let db = null;
+let firebaseReady = false;
+
+// ===== FIREBASE INIT =====
+function initFirebase() {
+  try {
+    if (FIREBASE_CONFIG.apiKey === "YOUR_API_KEY") {
+      document.getElementById('firebase-config-error').classList.remove('hidden');
+      firebaseReady = false;
+      return false;
+    }
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    db = firebase.firestore();
+    firebaseReady = true;
+    return true;
+  } catch(e) {
+    console.error('Firebase init error:', e);
+    document.getElementById('firebase-config-error').classList.remove('hidden');
+    return false;
+  }
+}
+
+// ===== LOGIN =====
+async function handleLogin() {
+  const name = document.getElementById('login-name').value.trim();
+  if (!name) { alert('이름을 입력해주세요'); return; }
+  const btn = document.getElementById('login-btn');
+  btn.textContent = '불러오는 중...';
+  btn.disabled = true;
+  currentUser = name;
+  isTeacher = false;
+  if (firebaseReady) {
+    await loadFromFirestore(name);
+  }
+  showApp(name);
+}
+
+function handleTeacherLogin() {
+  const pw = prompt('선생님 비밀번호를 입력하세요:');
+  if (pw === TEACHER_PASSWORD) {
+    isTeacher = true;
+    currentUser = '선생님';
+    showApp('선생님');
+    setTimeout(() => openTeacherPanel(), 300);
+  } else if (pw !== null) {
+    alert('비밀번호가 올바르지 않습니다.');
+  }
+}
+
+function showApp(name) {
+  document.getElementById('login-modal').style.display = 'none';
+  document.getElementById('current-user-display').textContent = name + '님';
+  document.getElementById('user-badge').classList.remove('hidden');
+  document.getElementById('user-badge').classList.add('flex');
+  if (isTeacher) {
+    document.getElementById('teacher-btn').style.removeProperty('display');
+    document.getElementById('teacher-btn').style.display = 'flex';
+  }
+  renderNav();
+  initCharts();
+  setupAutoSave();
+  showSaveIndicator('클라우드 연결됨', firebaseReady ? '#059669' : '#d97706');
+}
+
+function switchUser() {
+  if (confirm('다른 사람으로 변경하시겠습니까? 현재 입력 내용은 자동 저장됩니다.')) {
+    if (firebaseReady && currentUser && !isTeacher) saveToFirestore();
+    location.reload();
+  }
+}
+
+// ===== FIRESTORE SAVE / LOAD =====
+function collectFormData() {
+  const data = {};
+  document.querySelectorAll('input[type="text"][id], input[type="number"][id]').forEach(el => { data[el.id] = el.value; });
+  document.querySelectorAll('textarea[id]').forEach(el => { data[el.id] = el.value; });
+  document.querySelectorAll('input[type="range"][id]').forEach(el => { data[el.id] = el.value; });
+  document.querySelectorAll('select[id]').forEach(el => { data[el.id] = el.value; });
+  document.querySelectorAll('input[type="checkbox"][id]').forEach(el => { data[el.id] = el.checked; });
+  document.querySelectorAll('input[type="radio"]:checked[name]').forEach(el => { data['radio_' + el.name] = el.value; });
+  data['starRating'] = currentRating;
+  return data;
+}
+
+function restoreFormData(data) {
+  Object.entries(data).forEach(([key, value]) => {
+    if (key === 'starRating') { setRating(parseInt(value) || 0); return; }
+    if (key.startsWith('radio_')) {
+      const name = key.replace('radio_', '');
+      const radio = document.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (radio) radio.checked = true;
+      return;
+    }
+    const el = document.getElementById(key);
+    if (!el) return;
+    if (el.type === 'checkbox') { el.checked = value; return; }
+    el.value = value;
+    if (el.type === 'range') el.dispatchEvent(new Event('input'));
+  });
+  updatePromptBlocks();
+}
+
+async function saveToFirestore() {
+  if (!firebaseReady || !currentUser || isTeacher) return;
+  try {
+    showSaveIndicator('저장 중...', '#3b82f6', true);
+    const data = collectFormData();
+    await db.collection('students').doc(currentUser).set({
+      name: currentUser,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      data: data
+    }, { merge: true });
+    showSaveIndicator('저장됨 ✓', '#059669');
+  } catch(e) {
+    console.error('Save error:', e);
+    showSaveIndicator('저장 실패', '#dc2626');
+  }
+}
+
+async function loadFromFirestore(name) {
+  if (!firebaseReady) return;
+  try {
+    const doc = await db.collection('students').doc(name).get();
+    if (doc.exists && doc.data().data) {
+      restoreFormData(doc.data().data);
+    }
+  } catch(e) {
+    console.error('Load error:', e);
+  }
+}
+
+function setupAutoSave() {
+  if (!firebaseReady || isTeacher) return;
+  const allFields = document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select');
+  allFields.forEach(el => {
+    el.addEventListener('input', debouncedSave);
+    el.addEventListener('change', debouncedSave);
+  });
+  document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el => {
+    el.addEventListener('change', debouncedSave);
+  });
+}
+
+function debouncedSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(saveToFirestore, 2000);
+}
+
+// ===== SAVE INDICATOR =====
+function showSaveIndicator(text, color, pulse = false) {
+  const ind = document.getElementById('save-indicator');
+  const icon = document.getElementById('save-icon');
+  const txt = document.getElementById('save-text');
+  ind.classList.remove('hidden');
+  ind.classList.add('flex');
+  txt.textContent = text;
+  ind.style.backgroundColor = color + '15';
+  ind.style.borderColor = color + '40';
+  ind.style.color = color;
+  if (pulse) { icon.textContent = '⟳'; ind.classList.add('saving-pulse'); }
+  else { icon.textContent = '✓'; ind.classList.remove('saving-pulse'); }
+  if (!pulse) setTimeout(() => { ind.classList.add('hidden'); ind.classList.remove('flex'); }, 3000);
+}
+
+// ===== TEACHER PANEL =====
+async function openTeacherPanel() {
+  if (!isTeacher) {
+    const pw = prompt('선생님 비밀번호:');
+    if (pw !== TEACHER_PASSWORD) { alert('비밀번호가 올바르지 않습니다.'); return; }
+    isTeacher = true;
+  }
+  document.getElementById('teacher-modal').style.display = 'flex';
+  if (firebaseReady) {
+    try {
+      const snapshot = await db.collection('students').get();
+      const count = snapshot.size;
+      const names = [];
+      snapshot.forEach(doc => names.push(doc.id));
+      document.getElementById('teacher-stats').innerHTML = `
+        <div class="text-sm font-bold text-gray-800 mb-2">📊 저장된 학생 데이터</div>
+        <div class="text-2xl font-bold text-teal-600 mb-2">${count}명</div>
+        <div class="flex flex-wrap gap-1">${names.map(n => `<span class="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded-full">${n}</span>`).join('')}</div>`;
+    } catch(e) {
+      document.getElementById('teacher-stats').innerHTML = `<div class="text-sm text-red-600">⚠️ 데이터를 불러올 수 없습니다: ${e.message}</div>`;
+    }
+  } else {
+    document.getElementById('teacher-stats').innerHTML = `<div class="text-sm text-orange-600">⚠️ Firebase가 연결되지 않았습니다.</div>`;
+  }
+}
+
+function closeTeacherModal() { document.getElementById('teacher-modal').style.display = 'none'; }
+
+// ===== EXCEL EXPORT =====
+async function exportAllToExcel() {
+  if (!firebaseReady) { alert('Firebase가 연결되지 않아 데이터를 불러올 수 없습니다.'); return; }
+  try {
+    const btn = event.target;
+    btn.textContent = '📊 다운로드 중...';
+    btn.disabled = true;
+    const snapshot = await db.collection('students').get();
+    const students = [];
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      students.push({ name: doc.id, lastUpdated: d.lastUpdated ? new Date(d.lastUpdated.toDate()).toLocaleString('ko-KR') : '', ...( d.data || {}) });
+    });
+    if (students.length === 0) { alert('저장된 학생 데이터가 없습니다.'); btn.textContent = '📊 전체 학생 데이터 엑셀 다운로드'; btn.disabled = false; return; }
+    buildExcel(students);
+    btn.textContent = '📊 전체 학생 데이터 엑셀 다운로드';
+    btn.disabled = false;
+  } catch(e) {
+    alert('오류 발생: ' + e.message);
+  }
+}
+
+async function exportSingleStudent() {
+  if (!firebaseReady) { alert('Firebase가 연결되지 않았습니다.'); return; }
+  const name = prompt('다운로드할 학생 이름을 입력하세요:');
+  if (!name) return;
+  try {
+    const doc = await db.collection('students').doc(name).get();
+    if (!doc.exists) { alert(`'${name}' 학생의 데이터가 없습니다.`); return; }
+    const d = doc.data();
+    const student = { name: doc.id, lastUpdated: d.lastUpdated ? new Date(d.lastUpdated.toDate()).toLocaleString('ko-KR') : '', ...(d.data || {}) };
+    buildExcel([student], `${name}_AI발명가워크스테이션.xlsx`);
+  } catch(e) {
+    alert('오류: ' + e.message);
+  }
+}
+
+function buildExcel(students, filename) {
+  const wb = XLSX.utils.book_new();
+  const dateStr = new Date().toLocaleDateString('ko-KR');
+  filename = filename || `AI발명가_전체학생_${dateStr}.xlsx`;
+
+  // ── 공통 헬퍼 ──
+  const g = (s, k) => s[k] || '';
+  const gb = (s, k) => s[k] ? '✓' : '';
+
+  // ── Sheet 1: 전체 현황 ──
+  const overviewRows = [
+    ['이름', '마지막저장', '별점', '역량_관찰력', '역량_AI협업', '역량_문제해결', '역량_끈기', '역량_공감',
+     '발명품(1단계)', '아이디어1명(2단계)', '발명품명(5단계)']
+  ];
+  students.forEach(s => overviewRows.push([
+    s.name, s.lastUpdated, g(s,'starRating'),
+    g(s,'slider-observation'), g(s,'slider-ai'), g(s,'slider-problem'), g(s,'slider-persistence'), g(s,'slider-empathy'),
+    g(s,'s1-invention'), g(s,'s2-idea1-name'), g(s,'s5-invention-name')
+  ]));
+  const ws1 = XLSX.utils.aoa_to_sheet(overviewRows);
+  ws1['!cols'] = [{wch:12},{wch:18},{wch:6},{wch:10},{wch:10},{wch:10},{wch:8},{wch:8},{wch:20},{wch:20},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws1, '전체현황');
+
+  // ── Sheet 2: 활동지1 ──
+  const s1Rows = [
+    ['이름','발명품','기능','생활영향','자세한설명','AI챗봇소감',
+     '문제상황','누가(Who)','언제(When)','어디서(Where)','무엇을(What)','왜불편(Why)','어떻게해결(How)',
+     '배운점','느낀점']
+  ];
+  students.forEach(s => s1Rows.push([
+    s.name, g(s,'s1-invention'), g(s,'s1-function'), g(s,'s1-impact'), g(s,'s1-description'), g(s,'s1-ai-comment'),
+    g(s,'s1-problem-drawing'), g(s,'s1-who'), g(s,'s1-when'), g(s,'s1-where'), g(s,'s1-what'), g(s,'s1-why'), g(s,'s1-how'),
+    g(s,'s1-learned'), g(s,'s1-felt')
+  ]));
+  const ws2 = XLSX.utils.aoa_to_sheet(s1Rows);
+  ws2['!cols'] = Array(15).fill({wch:25});
+  XLSX.utils.book_append_sheet(wb, ws2, '활동지1_문제발견');
+
+  // ── Sheet 3: 활동지2 ──
+  const s2Rows = [
+    ['이름',
+     'S_대체아이디어','S_대체프롬프트','C_결합아이디어','C_결합프롬프트',
+     'A_응용아이디어','A_응용프롬프트','M_수정아이디어','M_수정프롬프트',
+     'P_다른용도아이디어','P_다른용도프롬프트','E_제거아이디어','E_제거프롬프트',
+     'R_반전아이디어','R_반전프롬프트',
+     '아이디어1_이름','아이디어1_특징','아이디어1_창의성','아이디어1_따뜻함','아이디어1_실현가능성',
+     '아이디어2_이름','아이디어2_특징','아이디어2_창의성','아이디어2_따뜻함','아이디어2_실현가능성',
+     '최종선택','선택이유','배운점','느낀점']
+  ];
+  students.forEach(s => s2Rows.push([
+    s.name,
+    g(s,'s2-sub-idea'), g(s,'s2-sub-prompt'), g(s,'s2-com-idea'), g(s,'s2-com-prompt'),
+    g(s,'s2-ada-idea'), g(s,'s2-ada-prompt'), g(s,'s2-mod-idea'), g(s,'s2-mod-prompt'),
+    g(s,'s2-put-idea'), g(s,'s2-put-prompt'), g(s,'s2-eli-idea'), g(s,'s2-eli-prompt'),
+    g(s,'s2-rev-idea'), g(s,'s2-rev-prompt'),
+    g(s,'s2-idea1-name'), g(s,'s2-idea1-features'), g(s,'s2-idea1-creativity'), g(s,'s2-idea1-warmth'), g(s,'s2-idea1-feasibility'),
+    g(s,'s2-idea2-name'), g(s,'s2-idea2-features'), g(s,'s2-idea2-creativity'), g(s,'s2-idea2-warmth'), g(s,'s2-idea2-feasibility'),
+    g(s,'radio_final-idea'), g(s,'s2-final-reason'), g(s,'s2-learned'), g(s,'s2-felt')
+  ]));
+  const ws3 = XLSX.utils.aoa_to_sheet(s2Rows);
+  ws3['!cols'] = Array(29).fill({wch:22});
+  XLSX.utils.book_append_sheet(wb, ws3, '활동지2_SCAMPER');
+
+  // ── Sheet 4: 활동지3 ──
+  const s3Rows = [
+    ['이름','역할(Role)','작업(Task)','글자크기','색상테마','버튼개수','특수기능','추가규칙','배운점','느낀점']
+  ];
+  students.forEach(s => s3Rows.push([
+    s.name,
+    g(s,'prompt-role-field'), g(s,'prompt-task-combined'),
+    g(s,'prompt-font-size'), g(s,'prompt-color-theme'), g(s,'prompt-button-count'), g(s,'prompt-special-feature'),
+    g(s,'prompt-constraint-extra'), g(s,'s3-learned'), g(s,'s3-felt')
+  ]));
+  const ws4 = XLSX.utils.aoa_to_sheet(s3Rows);
+  ws4['!cols'] = Array(10).fill({wch:28});
+  XLSX.utils.book_append_sheet(wb, ws4, '활동지3_프롬프트설계');
+
+  // ── Sheet 5: 활동지4 ──
+  const s4Rows = [
+    ['이름',
+     '버그1_발견','버그1_질문','버그1_해결','버그1_해결여부',
+     '버그2_발견','버그2_질문','버그2_해결','버그2_해결여부',
+     '버그3_발견','버그3_질문','버그3_해결','버그3_해결여부',
+     'AI검증1','AI검증2','AI검증3','AI검증4','AI검증5','최종판단',
+     'Glow1','Glow2','Grow1','Grow2','Glitch1','Glitch2',
+     '실행계획','리팩토링요청','배운점','느낀점']
+  ];
+  students.forEach(s => s4Rows.push([
+    s.name,
+    g(s,'s4-bug1-found'), g(s,'s4-bug1-question'), g(s,'s4-bug1-solution'), gb(s,'s4-bug1-solved'),
+    g(s,'s4-bug2-found'), g(s,'s4-bug2-question'), g(s,'s4-bug2-solution'), gb(s,'s4-bug2-solved'),
+    g(s,'s4-bug3-found'), g(s,'s4-bug3-question'), g(s,'s4-bug3-solution'), gb(s,'s4-bug3-solved'),
+    g(s,'s4-check1-note'), g(s,'s4-check2-note'), g(s,'s4-check3-note'), g(s,'s4-check4-note'), g(s,'s4-check5-note'),
+    g(s,'s4-final-judgment'),
+    g(s,'s4-glow1'), g(s,'s4-glow2'), g(s,'s4-grow1'), g(s,'s4-grow2'), g(s,'s4-glitch1'), g(s,'s4-glitch2'),
+    g(s,'s4-action-plan'), g(s,'s4-refactor'), g(s,'s4-learned'), g(s,'s4-felt')
+  ]));
+  const ws5 = XLSX.utils.aoa_to_sheet(s4Rows);
+  ws5['!cols'] = Array(29).fill({wch:22});
+  XLSX.utils.book_append_sheet(wb, ws5, '활동지4_디버깅피드백');
+
+  // ── Sheet 6: 활동지5 ──
+  const s5Rows = [
+    ['이름',
+     '기발한아이디어상','편리한디자인상','기술혁신상',
+     'Q1_문제해결되었나','Q2_도움된SCAMPER','Q3_AI역할',
+     '발명품이름','도움받는사람','나눔가치','공유가치',
+     'AI기여','나의주도성','협업깨달음',
+     '역량_관찰력','역량_AI협업','역량_문제해결','역량_끈기','역량_공감',
+     '별점','별점이유','성장한점','미래메시지']
+  ];
+  students.forEach(s => s5Rows.push([
+    s.name,
+    g(s,'s5-award-idea'), g(s,'s5-award-design'), g(s,'s5-award-tech'),
+    g(s,'s5-q1'), g(s,'s5-q2'), g(s,'s5-q3'),
+    g(s,'s5-invention-name'), g(s,'s5-helps-who'), g(s,'s5-sharing-value'), g(s,'s5-community-value'),
+    g(s,'s5-ai-contribution'), g(s,'s5-my-leadership'), g(s,'s5-collaboration-insight'),
+    g(s,'slider-observation'), g(s,'slider-ai'), g(s,'slider-problem'), g(s,'slider-persistence'), g(s,'slider-empathy'),
+    g(s,'starRating'), g(s,'s5-star-reason'), g(s,'s5-growth'), g(s,'s5-future-message')
+  ]));
+  const ws6 = XLSX.utils.aoa_to_sheet(s5Rows);
+  ws6['!cols'] = Array(23).fill({wch:25});
+  XLSX.utils.book_append_sheet(wb, ws6, '활동지5_성찰');
+
+  XLSX.writeFile(wb, filename);
+}
+
+// ===== NAVIGATION =====
+const steps = [
+  { id:'step-1', label:'1. 문제발견/정의', icon:'🌿' },
+  { id:'step-2', label:'2. 아이디어/SCAMPER', icon:'💡' },
+  { id:'step-3', label:'3. 구현하기', icon:'🏗️' },
+  { id:'step-4', label:'4. 테스트/개선', icon:'🛠️' },
+  { id:'step-5', label:'5. 발표/성찰', icon:'✨' }
+];
+let currentStepId = 'step-1';
+
+function renderNav() {
+  document.getElementById('nav-tabs').innerHTML = steps.map(s => `
+    <button onclick="switchStep('${s.id}')"
+      class="${s.id===currentStepId?'border-teal-500 text-teal-600':'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+      whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors duration-200">
+      <span>${s.icon}</span>${s.label}
+    </button>`).join('');
+}
+
+function switchStep(stepId) {
+  currentStepId = stepId;
+  renderNav();
+  document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+  document.getElementById(stepId).classList.add('active');
+  if (stepId==='step-2' && window.ideaChartInstance) window.ideaChartInstance.resize();
+  if (stepId==='step-5') {
+    if(window.growthChartInstance) window.growthChartInstance.resize();
+    if(window.growthChartExampleInstance) window.growthChartExampleInstance.resize();
+  }
+}
+
+// ===== CHARTS =====
+function initCharts() {
+  if (document.getElementById('ideaChart') && !window.ideaChartInstance) {
+    const ideaCtx = document.getElementById('ideaChart').getContext('2d');
+    window.ideaChartInstance = new Chart(ideaCtx, {
+      type:'bar', data:{ labels:['창의성','따뜻함','실현가능성'],
+        datasets:[{label:'아이디어 1',data:[7,9,8],backgroundColor:'rgba(59,130,246,0.6)',borderColor:'rgba(59,130,246,1)',borderWidth:1},
+                  {label:'아이디어 2',data:[9,7,9],backgroundColor:'rgba(249,115,22,0.6)',borderColor:'rgba(249,115,22,1)',borderWidth:1}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:10}},plugins:{legend:{position:'bottom'}}}
+    });
+  }
+  if (document.getElementById('growthChartExample') && !window.growthChartExampleInstance) {
+    const ctx = document.getElementById('growthChartExample').getContext('2d');
+    window.growthChartExampleInstance = new Chart(ctx, {
+      type:'radar', data:{labels:['관찰력','AI협업','문제해결','끈기/도전','공감능력'],
+        datasets:[{label:'예시',data:[4,5,3,4,5],fill:true,backgroundColor:'rgba(156,163,175,.2)',borderColor:'rgb(156,163,175)',pointBackgroundColor:'rgb(156,163,175)',pointBorderColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{r:{suggestedMin:0,suggestedMax:5,ticks:{stepSize:1}}},plugins:{legend:{position:'bottom'}}}
+    });
+  }
+  if (document.getElementById('growthChart') && !window.growthChartInstance) {
+    const ctx = document.getElementById('growthChart').getContext('2d');
+    window.growthChartInstance = new Chart(ctx, {
+      type:'radar', data:{labels:['관찰력','AI협업','문제해결','끈기/도전','공감능력'],
+        datasets:[{label:'나의 성장',data:[3,3,3,3,3],fill:true,backgroundColor:'rgba(99,102,241,.2)',borderColor:'rgb(99,102,241)',pointBackgroundColor:'rgb(99,102,241)',pointBorderColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{r:{suggestedMin:0,suggestedMax:5,ticks:{stepSize:1}}},plugins:{legend:{position:'bottom'}}}
+    });
+  }
+}
+
+function updateRadarChart() {
+  const vals = ['observation','ai','problem','persistence','empathy'].map(k => {
+    const v = parseInt(document.getElementById('slider-'+k).value);
+    document.getElementById('score-'+k).textContent = v;
+    return v;
+  });
+  if (window.growthChartInstance) { window.growthChartInstance.data.datasets[0].data = vals; window.growthChartInstance.update(); }
+}
+
+// ===== STAR RATING =====
+function setRating(r) {
+  currentRating = r;
+  document.getElementById('rating-value').textContent = r;
+  document.querySelectorAll('.star').forEach((s,i) => {
+    s.textContent = i<r ? '★' : '☆';
+    s.style.color = i<r ? '#FBBF24' : '#FCD34D';
+  });
+  debouncedSave();
+}
+
+// ===== PROMPT BUILDER =====
+function generateMasterPrompt() {
+  const role = document.getElementById('prompt-role-field').value.trim() || '(역할 미입력)';
+  const task = document.getElementById('prompt-task-combined').value.trim() || '(작업 미입력)';
+  const fontSize = document.getElementById('prompt-font-size').value;
+  const colorTheme = document.getElementById('prompt-color-theme').value;
+  const buttonCount = document.getElementById('prompt-button-count').value;
+  const specialFeature = document.getElementById('prompt-special-feature').value;
+  const extra = document.getElementById('prompt-constraint-extra').value.trim();
+  const constraints = [`글자는 ${fontSize}`, `색상은 ${colorTheme}`, `버튼은 ${buttonCount}`];
+  if (specialFeature !== '없음') constraints.push(specialFeature + ' 기능을 추가해줘');
+  if (extra) constraints.push(extra);
+  document.getElementById('master-prompt-display').textContent =
+    `**역할 (Role):**\n너는 어린이를 위한 ${role} 전문가이자 다정한 코딩 파트너야.\n\n**작업 (Task):**\n${task}\n\n**규칙 (Constraint):**\n${constraints.join(', ')}.\n\n---\n위 내용을 바탕으로 HTML/CSS/JS 웹 앱 코드를 하나의 파일로 작성해 주세요.`;
+}
+
+function copyPrompt() {
+  const txt = document.getElementById('master-prompt-display').textContent;
+  if (!txt || txt.includes('여기에 생성된')) { alert('먼저 프롬프트를 생성해주세요.'); return; }
+  navigator.clipboard.writeText(txt).then(() => alert('✅ 복사 완료!\nAI Studio에 붙여넣기 하세요.')).catch(() => alert('복사 실패'));
+}
+
+function toggleScamper(btn, t) {
+  const colors = {S:'#fee2e2',C:'#fed7aa',A:'#fef3c7',M:'#d1fae5',P:'#dbeafe',E:'#e9d5ff',R:'#fce7f3'};
+  if (btn.classList.toggle('scamper-active')) { btn.style.backgroundColor = colors[t]; btn.style.borderWidth='3px'; }
+  else { btn.style.backgroundColor=''; btn.style.borderWidth='2px'; }
+}
+
+function updatePromptBlocks() {
+  const r = document.getElementById('prompt-role-field')?.value.trim();
+  const t = document.getElementById('prompt-task-combined')?.value.trim();
+  const c = document.getElementById('prompt-constraint-extra')?.value.trim();
+  setBlock('block-role','display-role',r, r?`${r} 전문가`:'역할을 입력하세요');
+  setBlock('block-task','display-task',t, t||'만들 앱을 입력하세요');
+  setBlock('block-constraint','display-constraint',c, c||'디자인 규칙을 정하세요');
+}
+function setBlock(bId, dId, val, txt) {
+  const b=document.getElementById(bId), d=document.getElementById(dId);
+  if(!b||!d) return;
+  d.textContent = txt;
+  if(val) { b.classList.remove('scale-90','opacity-50'); b.classList.add('scale-100','opacity-100'); }
+  else { b.classList.add('scale-90','opacity-50'); b.classList.remove('scale-100','opacity-100'); }
+}
+
+// ===== BUG TABLE =====
+let bugRowCount = 3;
+function addBugRow() {
+  bugRowCount++;
+  const n = bugRowCount;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug${n}-found" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="어떤 문제를 발견했나요?"></textarea></td>
+    <td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug${n}-question" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI에게 어떻게 질문했나요?"></textarea></td>
+    <td class="border border-gray-300 px-4 py-3"><textarea id="s4-bug${n}-solution" rows="2" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="AI가 어떤 해결책을 제시했나요?"></textarea></td>
+    <td class="border border-gray-300 px-4 py-3 text-center align-middle"><input type="checkbox" id="s4-bug${n}-solved" class="w-5 h-5"></td>`;
+  document.getElementById('bug-table-body').appendChild(tr);
+  tr.querySelectorAll('textarea, input').forEach(el => {
+    el.addEventListener('input', debouncedSave);
+    el.addEventListener('change', debouncedSave);
+  });
+}
+
+// ===== RESET =====
+function confirmReset() { document.getElementById('reset-modal').style.display='flex'; }
+function cancelReset() { document.getElementById('reset-modal').style.display='none'; }
+function executeReset() {
+  document.getElementById('reset-modal').style.display='none';
+  document.querySelectorAll('input[type="text"],input[type="number"]').forEach(el => el.value='');
+  document.querySelectorAll('textarea').forEach(el => el.value='');
+  document.querySelectorAll('input[type="range"]').forEach(el => { el.value=3; el.dispatchEvent(new Event('input')); });
+  document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked=false);
+  document.querySelectorAll('input[type="radio"]').forEach(el => el.checked=false);
+  document.querySelectorAll('select').forEach(el => el.selectedIndex=0);
+  setRating(0);
+  if (firebaseReady && currentUser && !isTeacher) saveToFirestore();
+  alert('✅ 초기화 완료');
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  firebaseReady = initFirebase();
+  renderNav();
+
+  // Block update listeners
+  ['prompt-role-field','prompt-task-combined','prompt-constraint-extra'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', updatePromptBlocks);
+  });
+  ['prompt-font-size','prompt-color-theme','prompt-button-count','prompt-special-feature'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', updatePromptBlocks);
+  });
+  updatePromptBlocks();
+});
+</script>
+</body>
+</html>
