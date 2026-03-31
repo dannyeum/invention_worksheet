@@ -786,6 +786,35 @@ function switchUser() {
 }
 
 // ===== FIRESTORE SAVE / LOAD =====
+  // 1. 데이터 저장 함수 (오타 수정 및 로직 정비)
+async function saveToFirestore() {
+  if (!firebaseReady || !currentUser || isTeacher) {
+    if(!firebaseReady) console.warn("Firebase가 연결되지 않았습니다.");
+    return;
+  }
+  
+  const saveBtn = document.getElementById('manual-save-btn');
+  try {
+    // 버튼 상태 표시
+    if(saveBtn) saveBtn.innerHTML = '<span>⏳</span><span>저장 중...</span>';
+    showSaveIndicator('저장 중...', '#3b82f6', true);
+    
+    const data = collectFormData();
+    await db.collection('students').doc(currentUser).set({
+      name: currentUser,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      data: data
+    }, { merge: true });
+    
+    showSaveIndicator('저장 완료! ✓', '#059669');
+  } catch(e) {
+    console.error('Save error:', e);
+    showSaveIndicator('저장 실패', '#dc2626');
+  } finally {
+    if(saveBtn) saveBtn.innerHTML = '<span>💾</span><span>데이터 저장</span>';
+  }
+}
+  
 function collectFormData() {
     const data = {};
     
@@ -829,9 +858,7 @@ function restoreFormData(data) {
   });
   updatePromptBlocks();
 }
-
-
-
+// 2. 데이터 불러오기 함수
 async function loadFromFirestore(name) {
   if (!firebaseReady) return;
   try {
@@ -844,50 +871,24 @@ async function loadFromFirestore(name) {
   }
 }
 
+// 3. 자동 저장 설정 함수 (중첩 오류 해결)
 function setupAutoSave() {
-  if (!fasync function saveToFirestore() {
-  if (!firebaseReady || !currentUser || isTeacher) {
-    if(!firebaseReady) alert("Firebase 설정이 필요합니다.");
-    return;
-  }
+  if (!firebaseReady || isTeacher) return;
   
-  const saveBtn = document.getElementById('manual-save-btn');
-  try {
-    // 버튼 상태 변경
-    saveBtn.disabled = true;
-    saveBtn.classList.replace('bg-teal-600', 'bg-blue-400');
-    saveBtn.innerHTML = '<span>⏳</span><span>저장 중...</span>';
-    
-    showSaveIndicator('저장 중...', '#3b82f6', true);
-    const data = collectFormData();
-    await db.collection('students').doc(currentUser).set({
-      name: currentUser,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-      data: data
-    }, { merge: true });
-    
-    showSaveIndicator('저장 완료! ✓', '#059669');
-  } catch(e) {
-    console.error('Save error:', e);
-    showSaveIndicator('저장 실패', '#dc2626');
-    alert("저장 중 오류가 발생했습니다.");
-  } finally {
-    // 버튼 원상복구
-    saveBtn.disabled = false;
-    saveBtn.classList.replace('bg-blue-400', 'bg-teal-600');
-    saveBtn.innerHTML = '<span>💾</span><span>데이터 저장</span>';
-  }
-}irebaseReady || isTeacher) return;
+  // 라디오/체크박스를 제외한 모든 입력 필드에 이벤트 연결
   const allFields = document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select');
   allFields.forEach(el => {
     el.addEventListener('input', debouncedSave);
     el.addEventListener('change', debouncedSave);
   });
+  
+  // 라디오/체크박스 이벤트 연결
   document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el => {
     el.addEventListener('change', debouncedSave);
   });
 }
 
+// 4. 디바운스 세이브 (중복 호출 방지)
 function debouncedSave() {
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(saveToFirestore, 2000);
