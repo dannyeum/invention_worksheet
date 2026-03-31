@@ -85,24 +85,31 @@ body { font-family: 'Noto Sans KR', sans-serif; background-color: #F9FAFB; color
   <div class="modal-content" style="max-width:580px;">
     <div class="flex justify-between items-center mb-6">
       <div>
-        <h3 class="text-xl font-bold text-gray-900">👩‍🏫 선생님 모드</h3>
-        <p class="text-sm text-gray-500">학생 데이터를 조회하고 엑셀로 다운로드합니다</p>
+        <h3 class="text-xl font-bold text-gray-900">👩‍🏫 선생님 데이터 관리</h3>
+        <p class="text-sm text-gray-500">학생 데이터를 조회하고 관리합니다</p>
       </div>
       <button onclick="closeTeacherModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
     </div>
-    <div id="teacher-stats" class="bg-gray-50 rounded-lg p-4 mb-4">
+    
+    <div id="teacher-stats" class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
       <div class="text-sm text-gray-600">데이터를 불러오는 중...</div>
     </div>
+
     <div class="grid grid-cols-1 gap-3">
-      <button onclick="exportAllToExcel()"
-        class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
-        <span>📊</span> 전체 학생 데이터 엑셀 다운로드
+      <button onclick="exportAllToExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
+        <span>📊</span> 전체 학생 엑셀 다운로드
       </button>
-      <button onclick="exportSingleStudent()"
-        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
-        <span>👤</span> 특정 학생 데이터만 다운로드
-      </button>
-      <button onclick="closeTeacherModal()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition text-sm">닫기</button>
+      
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="deleteSingleStudent()" class="bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg font-bold text-sm transition shadow-sm">
+          👤 특정 학생 삭제
+        </button>
+        <button onclick="deleteAllStudents()" class="bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-bold text-sm transition shadow-sm">
+          🔥 전체 데이터 삭제
+        </button>
+      </div>
+      
+      <button onclick="closeTeacherModal()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition text-sm mt-2">닫기</button>
     </div>
   </div>
 </div>
@@ -114,26 +121,25 @@ body { font-family: 'Noto Sans KR', sans-serif; background-color: #F9FAFB; color
 <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <button onclick="location.reload()" class="text-2xl hover:bg-gray-100 p-2 rounded-full transition" title="홈으로 이동">🏠</button>
-      <h1 class="text-xl font-bold text-gray-900 tracking-tight hidden xs:block">AI S/W 발명가 <span class="text-teal-600">워크스테이션</span></h1>
+      <span class="text-3xl">🤖</span>
+      <h1 class="text-xl font-bold text-gray-900 tracking-tight">AI S/W 발명가 <span class="text-teal-600">워크스테이션</span></h1>
     </div>
-    
     <div class="flex items-center gap-2">
-      <div id="save-indicator" class="hidden items-center gap-1 px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200">
-        <span id="save-icon">✓</span><span id="save-text">연결됨</span>
-      </div>
-
       <div id="user-badge" class="hidden items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-lg">
         <span class="text-teal-600 text-sm">👤</span>
         <span id="current-user-display" class="text-teal-700 font-bold text-sm"></span>
       </div>
-
-      <button onclick="saveToFirestore()" id="manual-save-btn" class="flex items-center gap-1 px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg transition shadow-md">
-        <span>💾</span><span>데이터 저장</span>
-      </button>
-
+      <div id="save-indicator" class="hidden items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200">
+        <span id="save-icon">✓</span><span id="save-text">저장됨</span>
+      </div>
       <button onclick="openTeacherPanel()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition shadow-sm" title="선생님 모드" id="teacher-btn" style="display:none!important">
         <span>📊</span><span class="hidden md:inline">선생님</span>
+      </button>
+      <button onclick="confirmReset()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-lg transition" title="초기화">
+        <span>🔄</span><span class="hidden md:inline">초기화</span>
+      </button>
+      <button onclick="switchUser()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition" title="사용자 변경">
+        <span>↩</span><span class="hidden md:inline">변경</span>
       </button>
     </div>
   </div>
@@ -786,35 +792,6 @@ function switchUser() {
 }
 
 // ===== FIRESTORE SAVE / LOAD =====
-  // 1. 데이터 저장 함수 (오타 수정 및 로직 정비)
-async function saveToFirestore() {
-  if (!firebaseReady || !currentUser || isTeacher) {
-    if(!firebaseReady) console.warn("Firebase가 연결되지 않았습니다.");
-    return;
-  }
-  
-  const saveBtn = document.getElementById('manual-save-btn');
-  try {
-    // 버튼 상태 표시
-    if(saveBtn) saveBtn.innerHTML = '<span>⏳</span><span>저장 중...</span>';
-    showSaveIndicator('저장 중...', '#3b82f6', true);
-    
-    const data = collectFormData();
-    await db.collection('students').doc(currentUser).set({
-      name: currentUser,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-      data: data
-    }, { merge: true });
-    
-    showSaveIndicator('저장 완료! ✓', '#059669');
-  } catch(e) {
-    console.error('Save error:', e);
-    showSaveIndicator('저장 실패', '#dc2626');
-  } finally {
-    if(saveBtn) saveBtn.innerHTML = '<span>💾</span><span>데이터 저장</span>';
-  }
-}
-  
 function collectFormData() {
     const data = {};
     
@@ -840,25 +817,25 @@ function collectFormData() {
     data['starRating'] = currentRating;
 
     return data;
-}  
-function restoreFormData(data) {
-  Object.entries(data).forEach(([key, value]) => {
-    if (key === 'starRating') { setRating(parseInt(value) || 0); return; }
-    if (key.startsWith('radio_')) {
-      const name = key.replace('radio_', '');
-      const radio = document.querySelector(`input[name="${name}"][value="${value}"]`);
-      if (radio) radio.checked = true;
-      return;
-    }
-    const el = document.getElementById(key);
-    if (!el) return;
-    if (el.type === 'checkbox') { el.checked = value; return; }
-    el.value = value;
-    if (el.type === 'range') el.dispatchEvent(new Event('input'));
-  });
-  updatePromptBlocks();
 }
-// 2. 데이터 불러오기 함수
+
+async function saveToFirestore() {
+  if (!firebaseReady || !currentUser || isTeacher) return;
+  try {
+    showSaveIndicator('저장 중...', '#3b82f6', true);
+    const data = collectFormData();
+    await db.collection('students').doc(currentUser).set({
+      name: currentUser,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      data: data
+    }, { merge: true });
+    showSaveIndicator('저장됨 ✓', '#059669');
+  } catch(e) {
+    console.error('Save error:', e);
+    showSaveIndicator('저장 실패', '#dc2626');
+  }
+}
+
 async function loadFromFirestore(name) {
   if (!firebaseReady) return;
   try {
@@ -871,29 +848,69 @@ async function loadFromFirestore(name) {
   }
 }
 
-// 3. 자동 저장 설정 함수 (중첩 오류 해결)
 function setupAutoSave() {
   if (!firebaseReady || isTeacher) return;
-  
-  // 라디오/체크박스를 제외한 모든 입력 필드에 이벤트 연결
   const allFields = document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select');
   allFields.forEach(el => {
     el.addEventListener('input', debouncedSave);
     el.addEventListener('change', debouncedSave);
   });
-  
-  // 라디오/체크박스 이벤트 연결
   document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el => {
     el.addEventListener('change', debouncedSave);
   });
 }
 
-// 4. 디바운스 세이브 (중복 호출 방지)
 function debouncedSave() {
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(saveToFirestore, 2000);
 }
+// ===== [신규] 특정 학생 데이터 삭제 =====
+async function deleteSingleStudent() {
+  const name = prompt("삭제할 학생의 이름을 정확히 입력하세요:");
+  if (!name) return;
 
+  if (confirm(`'${name}' 학생의 모든 활동 기록이 영구적으로 삭제됩니다. 계속하시겠습니까?`)) {
+    try {
+      await db.collection('students').doc(name).delete();
+      alert(`✅ '${name}' 학생의 데이터가 삭제되었습니다.`);
+      openTeacherPanel(); // 목록 새로고침
+    } catch (e) {
+      alert("삭제 중 오류가 발생했습니다: " + e.message);
+    }
+  }
+}
+
+// ===== [신규] 전체 학생 데이터 초기화 (주의 필요) =====
+async function deleteAllStudents() {
+  const safetyCheck = prompt("모든 학생의 데이터를 삭제하려면 '전체삭제'라고 입력하세요.");
+  if (safetyCheck !== "전체삭제") {
+    alert("문구가 일치하지 않아 취소되었습니다.");
+    return;
+  }
+
+  const pw = prompt("관리자 비밀번호를 한 번 더 입력하세요:");
+  if (pw !== TEACHER_PASSWORD) {
+    alert("비밀번호가 틀렸습니다.");
+    return;
+  }
+
+  if (confirm("정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+    try {
+      const snapshot = await db.collection('students').get();
+      const batch = db.batch(); // 일괄 삭제를 위한 배치 생성
+      
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      alert("🔥 모든 학생 데이터가 성공적으로 초기화되었습니다.");
+      openTeacherPanel(); // 목록 새로고침
+    } catch (e) {
+      alert("초기화 중 오류가 발생했습니다: " + e.message);
+    }
+  }
+}
 // ===== SAVE INDICATOR =====
 function showSaveIndicator(text, color, pulse = false) {
   const ind = document.getElementById('save-indicator');
