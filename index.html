@@ -79,24 +79,31 @@ body { font-family: 'Noto Sans KR', sans-serif; background-color: #F9FAFB; color
   <div class="modal-content" style="max-width:580px;">
     <div class="flex justify-between items-center mb-6">
       <div>
-        <h3 class="text-xl font-bold text-gray-900">👩‍🏫 선생님 모드</h3>
-        <p class="text-sm text-gray-500">학생 데이터를 조회하고 엑셀로 다운로드합니다</p>
+        <h3 class="text-xl font-bold text-gray-900">👩‍🏫 선생님 데이터 관리</h3>
+        <p class="text-sm text-gray-500">학생 데이터를 조회하고 관리합니다</p>
       </div>
       <button onclick="closeTeacherModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
     </div>
-    <div id="teacher-stats" class="bg-gray-50 rounded-lg p-4 mb-4">
+    
+    <div id="teacher-stats" class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
       <div class="text-sm text-gray-600">데이터를 불러오는 중...</div>
     </div>
+
     <div class="grid grid-cols-1 gap-3">
-      <button onclick="exportAllToExcel()"
-        class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
-        <span>📊</span> 전체 학생 데이터 엑셀 다운로드
+      <button onclick="exportAllToExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
+        <span>📊</span> 전체 학생 엑셀 다운로드
       </button>
-      <button onclick="exportSingleStudent()"
-        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-bold transition shadow-md flex items-center justify-center gap-2">
-        <span>👤</span> 특정 학생 데이터만 다운로드
-      </button>
-      <button onclick="closeTeacherModal()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition text-sm">닫기</button>
+      
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="deleteSingleStudent()" class="bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg font-bold text-sm transition shadow-sm">
+          👤 특정 학생 삭제
+        </button>
+        <button onclick="deleteAllStudents()" class="bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-bold text-sm transition shadow-sm">
+          🔥 전체 데이터 삭제
+        </button>
+      </div>
+      
+      <button onclick="closeTeacherModal()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition text-sm mt-2">닫기</button>
     </div>
   </div>
 </div>
@@ -333,7 +340,53 @@ async function handleLogin() {
   initCharts();
   setupAutoSave();
 }
+// ===== [신규] 특정 학생 데이터 삭제 =====
+async function deleteSingleStudent() {
+  const name = prompt("삭제할 학생의 이름을 정확히 입력하세요:");
+  if (!name) return;
 
+  if (confirm(`'${name}' 학생의 모든 활동 기록이 영구적으로 삭제됩니다. 계속하시겠습니까?`)) {
+    try {
+      await db.collection('students').doc(name).delete();
+      alert(`✅ '${name}' 학생의 데이터가 삭제되었습니다.`);
+      openTeacherPanel(); // 목록 새로고침
+    } catch (e) {
+      alert("삭제 중 오류가 발생했습니다: " + e.message);
+    }
+  }
+}
+
+// ===== [신규] 전체 학생 데이터 초기화 (주의 필요) =====
+async function deleteAllStudents() {
+  const safetyCheck = prompt("모든 학생의 데이터를 삭제하려면 '전체삭제'라고 입력하세요.");
+  if (safetyCheck !== "전체삭제") {
+    alert("문구가 일치하지 않아 취소되었습니다.");
+    return;
+  }
+
+  const pw = prompt("관리자 비밀번호를 한 번 더 입력하세요:");
+  if (pw !== TEACHER_PASSWORD) {
+    alert("비밀번호가 틀렸습니다.");
+    return;
+  }
+
+  if (confirm("정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+    try {
+      const snapshot = await db.collection('students').get();
+      const batch = db.batch(); // 일괄 삭제를 위한 배치 생성
+      
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      alert("🔥 모든 학생 데이터가 성공적으로 초기화되었습니다.");
+      openTeacherPanel(); // 목록 새로고침
+    } catch (e) {
+      alert("초기화 중 오류가 발생했습니다: " + e.message);
+    }
+  }
+}
 function handleTeacherLogin() {
   if (prompt('비밀번호') === TEACHER_PASSWORD) {
     isTeacher = true;
