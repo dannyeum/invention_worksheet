@@ -761,7 +761,7 @@ function handleTeacherLogin() {
   const pw = prompt('선생님 비밀번호를 입력하세요:');
   if (pw === TEACHER_PASSWORD) {
     isTeacher = true;
-    currentUser = '선생님';
+    currentUser = '선생';
     showApp('선생님');
     setTimeout(() => openTeacherPanel(), 300);
   } else if (pw !== null) {
