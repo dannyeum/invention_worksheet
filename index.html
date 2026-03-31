@@ -114,25 +114,26 @@ body { font-family: 'Noto Sans KR', sans-serif; background-color: #F9FAFB; color
 <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <span class="text-3xl">🤖</span>
-      <h1 class="text-xl font-bold text-gray-900 tracking-tight">AI S/W 발명가 <span class="text-teal-600">워크스테이션</span></h1>
+      <button onclick="location.reload()" class="text-2xl hover:bg-gray-100 p-2 rounded-full transition" title="홈으로 이동">🏠</button>
+      <h1 class="text-xl font-bold text-gray-900 tracking-tight hidden xs:block">AI S/W 발명가 <span class="text-teal-600">워크스테이션</span></h1>
     </div>
+    
     <div class="flex items-center gap-2">
+      <div id="save-indicator" class="hidden items-center gap-1 px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200">
+        <span id="save-icon">✓</span><span id="save-text">연결됨</span>
+      </div>
+
       <div id="user-badge" class="hidden items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-lg">
         <span class="text-teal-600 text-sm">👤</span>
         <span id="current-user-display" class="text-teal-700 font-bold text-sm"></span>
       </div>
-      <div id="save-indicator" class="hidden items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200">
-        <span id="save-icon">✓</span><span id="save-text">저장됨</span>
-      </div>
+
+      <button onclick="saveToFirestore()" id="manual-save-btn" class="flex items-center gap-1 px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg transition shadow-md">
+        <span>💾</span><span>데이터 저장</span>
+      </button>
+
       <button onclick="openTeacherPanel()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition shadow-sm" title="선생님 모드" id="teacher-btn" style="display:none!important">
         <span>📊</span><span class="hidden md:inline">선생님</span>
-      </button>
-      <button onclick="confirmReset()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-lg transition" title="초기화">
-        <span>🔄</span><span class="hidden md:inline">초기화</span>
-      </button>
-      <button onclick="switchUser()" class="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition" title="사용자 변경">
-        <span>↩</span><span class="hidden md:inline">변경</span>
       </button>
     </div>
   </div>
@@ -829,22 +830,7 @@ function restoreFormData(data) {
   updatePromptBlocks();
 }
 
-async function saveToFirestore() {
-  if (!firebaseReady || !currentUser || isTeacher) return;
-  try {
-    showSaveIndicator('저장 중...', '#3b82f6', true);
-    const data = collectFormData();
-    await db.collection('students').doc(currentUser).set({
-      name: currentUser,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-      data: data
-    }, { merge: true });
-    showSaveIndicator('저장됨 ✓', '#059669');
-  } catch(e) {
-    console.error('Save error:', e);
-    showSaveIndicator('저장 실패', '#dc2626');
-  }
-}
+
 
 async function loadFromFirestore(name) {
   if (!firebaseReady) return;
@@ -859,7 +845,39 @@ async function loadFromFirestore(name) {
 }
 
 function setupAutoSave() {
-  if (!firebaseReady || isTeacher) return;
+  if (!fasync function saveToFirestore() {
+  if (!firebaseReady || !currentUser || isTeacher) {
+    if(!firebaseReady) alert("Firebase 설정이 필요합니다.");
+    return;
+  }
+  
+  const saveBtn = document.getElementById('manual-save-btn');
+  try {
+    // 버튼 상태 변경
+    saveBtn.disabled = true;
+    saveBtn.classList.replace('bg-teal-600', 'bg-blue-400');
+    saveBtn.innerHTML = '<span>⏳</span><span>저장 중...</span>';
+    
+    showSaveIndicator('저장 중...', '#3b82f6', true);
+    const data = collectFormData();
+    await db.collection('students').doc(currentUser).set({
+      name: currentUser,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      data: data
+    }, { merge: true });
+    
+    showSaveIndicator('저장 완료! ✓', '#059669');
+  } catch(e) {
+    console.error('Save error:', e);
+    showSaveIndicator('저장 실패', '#dc2626');
+    alert("저장 중 오류가 발생했습니다.");
+  } finally {
+    // 버튼 원상복구
+    saveBtn.disabled = false;
+    saveBtn.classList.replace('bg-blue-400', 'bg-teal-600');
+    saveBtn.innerHTML = '<span>💾</span><span>데이터 저장</span>';
+  }
+}irebaseReady || isTeacher) return;
   const allFields = document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select');
   allFields.forEach(el => {
     el.addEventListener('input', debouncedSave);
