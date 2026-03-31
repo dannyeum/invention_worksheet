@@ -1266,17 +1266,44 @@ function addBugRow() {
 // ===== RESET =====
 function confirmReset() { document.getElementById('reset-modal').style.display='flex'; }
 function cancelReset() { document.getElementById('reset-modal').style.display='none'; }
+// ===== 수정된 데이터 초기화 함수 (비밀번호 추가) =====
 function executeReset() {
-  document.getElementById('reset-modal').style.display='none';
-  document.querySelectorAll('input[type="text"],input[type="number"]').forEach(el => el.value='');
-  document.querySelectorAll('textarea').forEach(el => el.value='');
-  document.querySelectorAll('input[type="range"]').forEach(el => { el.value=3; el.dispatchEvent(new Event('input')); });
-  document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked=false);
-  document.querySelectorAll('input[type="radio"]').forEach(el => el.checked=false);
-  document.querySelectorAll('select').forEach(el => el.selectedIndex=0);
-  setRating(0);
-  if (firebaseReady && currentUser && !isTeacher) saveToFirestore();
-  alert('✅ 초기화 완료');
+    // 1. 비밀번호 확인
+    const pw = prompt("데이터를 초기화하려면 선생님 비밀번호를 입력하세요:");
+    
+    if (pw === null) return; // 취소 버튼을 누른 경우
+    
+    if (pw !== TEACHER_PASSWORD) {
+        alert("❌ 비밀번호가 틀렸습니다. 데이터가 삭제되지 않았습니다.");
+        return;
+    }
+
+    // 2. 비밀번호가 맞을 경우 최종 확인
+    if (confirm("정말로 모든 내용을 지우시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+        document.getElementById('reset-modal').style.display = 'none';
+        
+        // 모든 입력 필드 비우기
+        document.querySelectorAll('input[type="text"], input[type="number"]').forEach(el => el.value = '');
+        document.querySelectorAll('textarea').forEach(el => el.value = '');
+        
+        // 슬라이더 및 체크박스/라디오 초기화
+        document.querySelectorAll('input[type="range"]').forEach(el => { 
+            el.value = 3; 
+            el.dispatchEvent(new Event('input')); 
+        });
+        document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(el => el.checked = false);
+        document.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+        
+        // 별점 초기화
+        setRating(0);
+        
+        // Firebase 저장 (빈 데이터로 덮어쓰기)
+        if (firebaseReady && currentUser && !isTeacher) {
+            saveToFirestore();
+        }
+        
+        alert('✅ 데이터가 성공적으로 초기화되었습니다.');
+    }
 }
 
 // ===== INIT =====
