@@ -770,18 +770,21 @@ function handleTeacherLogin() {
 }
 
 function showApp(name) {
+  // 1. 로그인창 닫기
   document.getElementById('login-modal').style.display = 'none';
+  
+  // 2. 사용자 이름 표시 (앞서 수정하신 '선생님' 오타 반영 예시)
   document.getElementById('current-user-display').textContent = name + '님';
   document.getElementById('user-badge').classList.remove('hidden');
-  document.getElementById('user-badge').classList.add('flex');
-  if (isTeacher) {
-    document.getElementById('teacher-btn').style.removeProperty('display');
-    document.getElementById('teacher-btn').style.display = 'flex';
+  
+  // 3. ⭐ 핵심: 로그인한 사용자의 기존 데이터를 Firebase에서 불러오기
+  if (firebaseReady && !isTeacher) {
+    loadFromFirestore(name); 
   }
-  renderNav();
-  initCharts();
+  
+  // 4. 자동 저장 활성화 등 나머지 로직
   setupAutoSave();
-  showSaveIndicator('클라우드 연결됨', firebaseReady ? '#059669' : '#d97706');
+  renderNav();
 }
 
 function switchUser() {
