@@ -787,15 +787,32 @@ function switchUser() {
 
 // ===== FIRESTORE SAVE / LOAD =====
 function collectFormData() {
-  const data = {};
-  document.querySelectorAll('input[type="text"][id], input[type="number"][id]').forEach(el => { data[el.id] = el.value; });
-  document.querySelectorAll('textarea[id]').forEach(el => { data[el.id] = el.value; });
-  document.querySelectorAll('input[type="range"][id]').forEach(el => { data[el.id] = el.value; });
-  document.querySelectorAll('select[id]').forEach(el => { data[el.id] = el.value; });
-  document.querySelectorAll('input[type="checkbox"][id]').forEach(el => { data[el.id] = el.checked; });
-  document.querySelectorAll('input[type="radio"]:checked[name]').forEach(el => { data['radio_' + el.name] = el.value; });
-  data['starRating'] = currentRating;
-  return data;
+    const data = {};
+    
+    // 1~4단계 데이터 및 단계별 성찰 수집
+    for (let i = 1; i <= 4; i++) {
+        const stepInputs = document.querySelectorAll(`#step${i} input, #step${i} textarea`);
+        stepInputs.forEach(input => {
+            // id가 있으면 id를 키로, 없으면 name을 키로 저장
+            const key = input.id || input.name;
+            if (key) data[key] = input.value;
+        });
+    }
+
+    // [중요] 5단계: 최종 성찰 및 소감 수집
+    const step5Inputs = document.querySelectorAll(`#step5 textarea, #step5 input`);
+    step5Inputs.forEach(input => {
+        const key = input.id || input.name;
+        if (key) data[key] = input.value;
+    });
+
+    // 라디오 버튼 (예: 만족도 별점 등)이 있다면 추가 수집
+    const radios = document.querySelectorAll('input[type="radio"]:checked');
+    radios.forEach(radio => {
+        data[radio.name] = radio.value;
+    });
+
+    return data;
 }
 
 function restoreFormData(data) {
